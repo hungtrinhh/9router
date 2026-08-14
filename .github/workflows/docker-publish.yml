@@ -78,6 +78,7 @@ jobs:
             ${{ env.GHCR_IMAGE }}:${{ matrix.artifact }}
             ${{ env.DOCKERHUB_IMAGE }}:${{ matrix.artifact }}
           labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,push=true
           cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.artifact }}
           cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.artifact }},mode=max
           provenance: false
@@ -151,12 +152,12 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
-            $(jq -cr --arg image "$GHCR_IMAGE" '.tags | map(select(startswith($image + ":")) | "-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(jq -cr --arg image "$GHCR_IMAGE" '.tags | map(select(startswith($image + ":")) | "-t " + .) | unique | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ env.GHCR_IMAGE }}@sha256:%s ' *)
 
           if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
             docker buildx imagetools create \
-              $(jq -cr --arg image "$DOCKERHUB_IMAGE" '.tags | map(select(startswith($image + ":")) | "-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+              $(jq -cr --arg image "$DOCKERHUB_IMAGE" '.tags | map(select(startswith($image + ":")) | "-t " + .) | unique | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
               $(printf '${{ env.DOCKERHUB_IMAGE }}@sha256:%s ' *)
           fi
 
