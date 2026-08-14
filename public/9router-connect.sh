@@ -9,6 +9,7 @@ API_KEY="${NINEROUTER_KEY:-}"
 MODEL="${NINEROUTER_MODEL:-}"
 ALLOW_HTTP=0
 SKIP_CHECK=0
+NO_PROMPT=0
 
 usage() {
   cat <<EOF
@@ -24,6 +25,7 @@ Options:
   --model <model>     9Router model or combo ID (prompted when omitted)
   --allow-http        Allow plain HTTP for a non-local server
   --skip-check        Do not validate the key/model against /v1/models
+  --no-prompt         Never prompt; missing required values fail instead
   -h, --help          Show this help
 
 Environment alternatives:
@@ -76,6 +78,10 @@ while [ "$#" -gt 0 ]; do
       SKIP_CHECK=1
       shift
       ;;
+    --no-prompt)
+      NO_PROMPT=1
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -109,6 +115,9 @@ case "$API_URL" in
 esac
 
 if [ -z "$API_KEY" ]; then
+  if [ "$NO_PROMPT" -eq 1 ]; then
+    die "API key is required; set NINEROUTER_KEY when running non-interactively"
+  fi
   [ -t 0 ] || die "API key is required; set NINEROUTER_KEY when running non-interactively"
   printf '9Router API key: ' >&2
   IFS= read -r -s API_KEY
@@ -116,14 +125,15 @@ if [ -z "$API_KEY" ]; then
 fi
 [ -n "$API_KEY" ] || die "API key cannot be empty"
 
-if [ -z "$MODEL" ]; then
+if [ -z "$MODEL" ] && [ "$NO_PROMPT" -eq 0 ]; then
   [ -t 0 ] || die "model is required; set NINEROUTER_MODEL when running non-interactively"
   printf '9Router model or combo ID: ' >&2
   IFS= read -r MODEL
 fi
-[ -n "$MODEL" ] || die "model cannot be empty"
 
-if [ "$SKIP_CHECK" -eq 0 ]; then
+# Mirror the dashboard Apply behavior: when no model is configured, write the
+# connection without model fields instead of prompting for one.
+if [ "$SKIP_CHECK" -eq 0 ] && [ -n "$MODEL" ]; then
   command -v curl >/dev/null 2>&1 || die "curl is required to validate the remote server"
   RESPONSE_FILE="$(mktemp "${TMPDIR:-/tmp}/9router-models.XXXXXX")"
   trap 'rm -f "$RESPONSE_FILE"' EXIT
@@ -212,11 +222,14 @@ if tool == "claude":
     env.update({
         "ANTHROPIC_BASE_URL": base_url,
         "ANTHROPIC_AUTH_TOKEN": api_key,
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
         "API_TIMEOUT_MS": "600000",
     })
+    if model:
+        env.update({
+            "ANTHROPIC_DEFAULT_OPUS_MODEL": model,
+            "ANTHROPIC_DEFAULT_SONNET_MODEL": model,
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL": model,
+        })
     config["hasCompletedOnboarding"] = True
     write_json(path, config)
 
@@ -232,12 +245,13 @@ elif tool == "opencode":
     provider = providers.setdefault("9router", {})
     provider.setdefault("npm", "@ai-sdk/openai-compatible")
     provider["options"] = {**provider.get("options", {}), "baseURL": base_url, "apiKey": api_key}
-    models = provider.setdefault("models", {})
-    models[model] = {
-        "name": model,
-        "modalities": {"input": ["text", "image"], "output": ["text"]},
-    }
-    config["model"] = f"9router/{model}"
+    if model:
+        models = provider.setdefault("models", {})
+        models[model] = {
+            "name": model,
+            "modalities": {"input": ["text", "image"], "output": ["text"]},
+        }
+        config["model"] = f"9router/{model}"
     write_json(path, config)
 
 else:
@@ -270,16 +284,15 @@ else:
 
     escaped_model = model.replace("\\", "\\\\").replace('"', '\\"')
     escaped_url = base_url.replace("\\", "\\\\").replace('"', '\\"')
-    top = [f'model = "{escaped_model}"', 'model_provider = "9router"', ""]
+    top = [f'model = "{escaped_model}"', 'model_provider = "9router"', ""] if model else []
     block = [
         "[model_providers.9router]",
         'name = "9Router"',
         f'base_url = "{escaped_url}"',
         'wire_api = "responses"',
-        "",
-        "[agents.subagent]",
-        f'model = "{escaped_model}"',
     ]
+    if model:
+        block += ["", "[agents.subagent]", f'model = "{escaped_model}"']
     config_path.write_text("\n".join(top + output).rstrip() + "\n\n" + "\n".join(block) + "\n", encoding="utf-8")
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     auth = load_json(auth_path)
@@ -293,4 +306,6 @@ for saved in backups:
 PY
 
 printf 'Remote endpoint: %s\n' "$API_URL"
-printf 'Model: %s\n' "$MODEL"
+if [ -n "$MODEL" ]; then
+  printf 'Model: %s\n' "$MODEL"
+fi
