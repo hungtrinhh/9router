@@ -1,3 +1,13 @@
+# v0.5.56 (2026-08-15)
+
+## Fixes
+- **CLI Tools**: dashboard-generated installers (Windows `.bat`, macOS `.command`,
+  Linux `.sh` / copy-command) are now fully non-interactive — URL, API key and
+  model are pre-filled from the dashboard, and the installer never prompts for
+  "9Router model or combo ID" or the API key. When no model is configured it
+  mirrors the Apply button (connection written without model fields) instead of
+  blocking on a prompt; provided models are still validated against `/v1/models`.
+
 # v0.5.55 (2026-08-14)
 
 ## Features
