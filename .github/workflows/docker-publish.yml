@@ -10,9 +10,25 @@ env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
   DOCKERHUB_IMAGE: hungtrinh203/9router
 
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.platform }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            artifact: linux-amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            artifact: linux-arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -53,14 +69,95 @@ jobs:
             type=raw,value=manual,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          platforms: ${{ matrix.platform }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache
-          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache,mode=max
-          platforms: linux/amd64,linux/arm64
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.artifact }}
+          cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.artifact }},mode=max
           provenance: false
           sbom: false
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.artifact }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Publish multi-platform manifest
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.GHCR_IMAGE }}
+            name=${{ env.DOCKERHUB_IMAGE }},enable=${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=manual,enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - name: Create manifest and push tags
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr --arg image "$GHCR_IMAGE" '.tags | map(select(startswith($image + ":")) | "-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.GHCR_IMAGE }}@sha256:%s ' *)
+
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            docker buildx imagetools create \
+              $(jq -cr --arg image "$DOCKERHUB_IMAGE" '.tags | map(select(startswith($image + ":")) | "-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+              $(printf '${{ env.DOCKERHUB_IMAGE }}@sha256:%s ' *)
+          fi
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect "${{ env.GHCR_IMAGE }}:${{ steps.meta.outputs.version }}"
