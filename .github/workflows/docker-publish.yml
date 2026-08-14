@@ -74,9 +74,10 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ env.GHCR_IMAGE }}:${{ matrix.artifact }}
+            ${{ env.DOCKERHUB_IMAGE }}:${{ matrix.artifact }}
           labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.artifact }}
           cache-to: type=registry,ref=${{ env.GHCR_IMAGE }}:buildcache-${{ matrix.artifact }},mode=max
           provenance: false
