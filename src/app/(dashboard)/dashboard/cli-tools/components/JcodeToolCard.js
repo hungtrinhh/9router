@@ -262,7 +262,7 @@ id = "${selectedModel || "cc/claude-opus-4-7"}"`;
             </div>
           )}
 
-          {!checkingJcode && jcodeStatus?.installed && (
+          {!checkingJcode && jcodeStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {/* Info notes */}

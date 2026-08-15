@@ -232,7 +232,7 @@ model = "${selectedModel || "provider/model-id"}"
             </div>
           )}
 
-          {!checking && deepseekStatus?.installed && (
+          {!checking && deepseekStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {tool.notes && tool.notes.length > 0 && (

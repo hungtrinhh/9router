@@ -1,3 +1,12 @@
+# v0.5.57 (2026-08-15)
+
+## Fixes
+- **CLI Tools**: keep configuration settings available when a CLI executable is
+  not detected on the 9Router host, which commonly occurs on new machines or
+  when tray/autostart launches with a restricted `PATH`
+- **CLI Tray**: add a direct Settings shortcut and clarify undetected CLI tools
+  instead of reporting them as definitively not installed
+
 # v0.5.56 (2026-08-15)
 
 ## Fixes

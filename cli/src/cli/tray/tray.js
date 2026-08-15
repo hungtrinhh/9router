@@ -60,6 +60,7 @@ function buildMenuItems(port, autostartEnabled) {
   return [
     { title: `9Router (Port ${port})`, tooltip: "Server is running", enabled: false },
     { title: "Open Dashboard", tooltip: "Open in browser", enabled: true },
+    { title: "Settings", tooltip: "Open settings in browser", enabled: true },
     {
       title: autostartEnabled ? "✓ Auto-start Enabled" : "Enable Auto-start",
       tooltip: "Run on OS startup",
@@ -70,7 +71,7 @@ function buildMenuItems(port, autostartEnabled) {
 }
 
 // Menu item indexes
-const MENU_INDEX = { STATUS: 0, DASHBOARD: 1, AUTOSTART: 2, QUIT: 3 };
+const MENU_INDEX = { STATUS: 0, DASHBOARD: 1, SETTINGS: 2, AUTOSTART: 3, QUIT: 4 };
 
 /**
  * Get current autostart state
@@ -92,6 +93,8 @@ function handleClick(index, options, onAutostartToggle) {
   if (index === MENU_INDEX.DASHBOARD) {
     if (onOpenDashboard) onOpenDashboard();
     else openBrowser(`http://localhost:${port}/dashboard`);
+  } else if (index === MENU_INDEX.SETTINGS) {
+    openBrowser(`http://localhost:${port}/dashboard/profile`);
   } else if (index === MENU_INDEX.AUTOSTART) {
     const enabled = getAutostartEnabled();
     try {

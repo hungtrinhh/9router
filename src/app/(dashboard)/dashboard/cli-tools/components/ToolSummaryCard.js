@@ -4,10 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { Card } from "@/shared/components";
 
-// Derive simple connected/configured/not-installed status from API payload
+// Derive simple connection and host-detection status from API payload
 function getStatus(status) {
   if (!status) return { label: "Unknown", cls: "bg-gray-500/10 text-gray-500" };
-  if (!status.installed) return { label: "Not installed", cls: "bg-gray-500/10 text-gray-500" };
+  if (!status.installed) return { label: "Not detected", cls: "bg-gray-500/10 text-gray-500" };
   if (status.has9Router) return { label: "Connected", cls: "bg-green-500/10 text-green-600 dark:text-green-400" };
   return { label: "Not configured", cls: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400" };
 }

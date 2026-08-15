@@ -196,7 +196,7 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
             </div>
           )}
 
-          {!checking && status?.installed && (
+          {!checking && status && (
             <>
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">

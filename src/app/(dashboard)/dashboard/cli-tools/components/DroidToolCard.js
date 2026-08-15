@@ -284,7 +284,7 @@ export default function DroidToolCard({
             </div>
           )}
 
-          {!checkingDroid && droidStatus?.installed && (
+          {!checkingDroid && droidStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {/* Endpoint (selector) */}

@@ -294,7 +294,7 @@ export default function GrokBuildToolCard({
             </div>
           )}
 
-          {!checking && grokStatus?.installed && (
+          {!checking && grokStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {tool.notes?.length > 0 && (
