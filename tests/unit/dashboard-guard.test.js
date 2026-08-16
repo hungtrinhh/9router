@@ -33,17 +33,23 @@ vi.mock("@/lib/auth/dashboardSession", () => ({
   verifyDashboardAuthToken: mocks.verifyDashboardAuthToken,
 }));
 
+vi.mock("@/lib/auth/trustedPeer", () => ({
+  hasTrustedPeerHeaders: (request) =>
+    request.headers.get("x-9r-peer-token") === process.env.NINEROUTER_PEER_TOKEN,
+}));
+
 const { proxy, __test__ } = await import("../../src/dashboardGuard.js");
 
 const PEER_TOKEN = "peer-token-fixture";
 
-function request(pathname, headers = {}) {
+function request(pathname, headers = {}, method = "GET") {
   const normalizedHeaders = new Headers(headers);
   return {
     nextUrl: { pathname, searchParams: new URL(`http://localhost${pathname}`).searchParams },
     headers: normalizedHeaders,
     cookies: { get: vi.fn(() => undefined) },
     url: `http://localhost${pathname}`,
+    method,
   };
 }
 
@@ -263,6 +269,38 @@ describe("dashboard guard local-only access", () => {
       host: "router.example.com",
       "x-9r-cli-token": "cli-token",
     }));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("rejects remote dashboard mutations of CLI settings", async () => {
+    const response = await proxy(request(
+      "/api/cli-tools/opencode-settings",
+      { host: "router.example.com" },
+      "POST",
+    ));
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Apply and Reset are only available on the machine running 9Router");
+  });
+
+  it("allows remote CLI settings mutations with a valid CLI token", async () => {
+    const response = await proxy(request(
+      "/api/cli-tools/opencode-settings",
+      { host: "router.example.com", "x-9r-cli-token": "cli-token" },
+      "DELETE",
+    ));
+
+    expect(response).toBe(mocks.nextResponse);
+  });
+
+  it("does not block remote reads of CLI settings", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+
+    const response = await proxy(request(
+      "/api/cli-tools/opencode-settings",
+      { host: "router.example.com" },
+    ));
 
     expect(response).toBe(mocks.nextResponse);
   });

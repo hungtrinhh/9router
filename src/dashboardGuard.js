@@ -201,6 +201,16 @@ export const __test__ = {
 export async function proxy(request) {
   const { pathname } = request.nextUrl;
 
+  const isCliSettingsMutation =
+    /\/api\/cli-tools\/[^/]+-settings$/.test(pathname) &&
+    ["POST", "PATCH", "DELETE"].includes(request.method);
+  if (isCliSettingsMutation && !(await canAccessLocalOnlyRoute(request))) {
+    return NextResponse.json(
+      { error: "Apply and Reset are only available on the machine running 9Router" },
+      { status: 403 },
+    );
+  }
+
   // Local-only gate for spawn-capable / host-secret routes.
   if (LOCAL_ONLY_PATHS.some((p) => pathname.startsWith(p))) {
     if (!(await canAccessLocalOnlyRoute(request))) {

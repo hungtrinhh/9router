@@ -14,7 +14,7 @@ import {
 
 const CLOUD_URL = process.env.NEXT_PUBLIC_CLOUD_URL;
 
-export default function ToolDetailClient({ toolId, machineId }) {
+export default function ToolDetailClient({ toolId, machineId, canManageLocalSettings }) {
   const tool = CLI_TOOLS[toolId];
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,6 +139,7 @@ export default function ToolDetailClient({ toolId, machineId }) {
       tunnelPublicUrl,
       tailscaleEnabled,
       tailscaleUrl,
+      canManageLocalSettings,
     };
 
     switch (toolId) {
@@ -196,6 +197,12 @@ export default function ToolDetailClient({ toolId, machineId }) {
         <h1 className="text-xl font-semibold text-text-main sm:text-2xl">{tool.name}</h1>
         <p className="text-sm text-text-muted">{tool.description}</p>
       </div>
+      {!canManageLocalSettings && (
+        <div className="flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+          <span className="material-symbols-outlined text-[18px]">info</span>
+          <span>Apply and Reset are disabled because this dashboard is opened remotely. Run 9Router on this device or configure the CLI manually on this device.</span>
+        </div>
+      )}
       {loading ? <CardSkeleton /> : renderToolCard()}
     </div>
   );

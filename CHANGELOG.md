@@ -1,3 +1,14 @@
+# v0.5.58 (2026-08-16)
+
+## Fixes
+- **CLI Tools**: disable Apply and Reset when the dashboard is opened from a
+  different machine, since those actions modify configuration on the 9Router
+  host rather than the browser device
+- **Security**: reject remote dashboard mutations of CLI settings at the server
+  guard while preserving authenticated machine-token access for the 9Router CLI
+- **CLI Tools**: keep status inspection and Manual Config available remotely and
+  show guidance for configuring the browser device directly
+
 # v0.5.57 (2026-08-15)
 
 ## Fixes
