@@ -1,8 +1,13 @@
 import { getUsageStats, statsEmitter, getActiveRequests } from "@/lib/usageDb";
 
+const VALID_PERIODS = new Set(["today", "24h", "7d", "30d", "60d", "all"]);
+
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const requestedPeriod = searchParams.get("period") || "today";
+  const period = VALID_PERIODS.has(requestedPeriod) ? requestedPeriod : "today";
   const encoder = new TextEncoder();
   const state = { closed: false, keepalive: null, send: null, sendPending: null, cachedStats: null };
 
@@ -19,7 +24,7 @@ export async function GET() {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(quickStats)}\n\n`));
           }
           // Then do full recalc and update cache
-          const stats = await getUsageStats();
+          const stats = await getUsageStats(period);
           state.cachedStats = stats;
           controller.enqueue(encoder.encode(`data: ${JSON.stringify(stats)}\n\n`));
         } catch {

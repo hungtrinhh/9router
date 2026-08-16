@@ -1,3 +1,9 @@
+# v0.5.59 (2026-08-16)
+
+## Fixes
+- **Usage Dashboard**: update cached-token totals and per-model/account usage in
+  real time by keeping SSE aggregate snapshots aligned with the selected period
+
 # v0.5.58 (2026-08-16)
 
 ## Fixes
