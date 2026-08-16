@@ -1,3 +1,10 @@
+# v0.5.60 (2026-08-16)
+
+## Fixes
+- **Codex Usage**: preserve cached tokens reported in OpenAI
+  `prompt_tokens_details.cached_tokens` when canonicalizing usage for SQLite, so
+  the dashboard no longer stores and displays cache hits as zero
+
 # v0.5.59 (2026-08-16)
 
 ## Fixes

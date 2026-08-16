@@ -37,6 +37,18 @@ describe("canonicalizeUsage", () => {
     expect(out.cache_creation_input_tokens).toBe(0);
   });
 
+  it("preserves cached tokens from translated OpenAI usage details", () => {
+    const out = canonicalizeUsage({
+      prompt_tokens: 25676,
+      completion_tokens: 396,
+      prompt_tokens_details: { cached_tokens: 16896 },
+    });
+    expect(out.prompt_tokens).toBe(25676);
+    expect(out.completion_tokens).toBe(396);
+    expect(out.cached_tokens).toBe(16896);
+    expect(out.total_tokens).toBe(26072);
+  });
+
   it("passes through Gemini inclusive prompt (cachedContent already counted)", () => {
     const out = canonicalizeUsage({
       prompt_tokens: 500,
