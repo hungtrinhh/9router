@@ -46,6 +46,9 @@ export function detectClientTool(headers = {}, body = {}) {
   // DeepSeek TUI
   if (ua.includes("deepseek-tui")) return "deepseek-tui";
 
+  // Oh My Pi (OMP)
+  if (ua.includes("omp/") || ua.includes("oh-my-pi") || ua.includes("pi-coding-agent")) return "omp";
+
   return null;
 }
 

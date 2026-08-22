@@ -573,6 +573,72 @@ async function showHermesMenu(port, breadcrumb = []) {
   });
 }
 
+// ─── Oh My Pi (OMP) ─────────────────────────────────────────────────────────
+
+/**
+ * Build header showing current OMP config status
+ * @returns {Promise<string>}
+ */
+async function buildOmpHeader() {
+  const result = await api.getCliToolSettings("omp");
+  if (!result.success) return `  ${COLORS.red}Failed to load settings${COLORS.reset}`;
+
+  const { installed, has9Router, omp, settings } = result.data;
+  if (!installed) {
+    return `  Status:   ${COLORS.red}✗ Not installed${COLORS.reset}\n  ${COLORS.dim}Install via npm install -g @oh-my-pi/pi-coding-agent${COLORS.reset}`;
+  }
+  if (!has9Router) {
+    return [
+      `  Status:   ${COLORS.red}✗ Not configured${COLORS.reset}`,
+      `  ${COLORS.dim}Run "Quick Setup" to configure 9Router for OMP${COLORS.reset}`
+    ].join("\n");
+  }
+
+  const lines = [`  Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
+  if (omp?.baseUrl) lines.push(`  Endpoint: ${COLORS.cyan}${omp.baseUrl}${COLORS.reset}`);
+  if (omp?.activeModel) lines.push(`  Primary:  ${COLORS.dim}${omp.activeModel}${COLORS.reset}`);
+  if (omp?.smolModel) lines.push(`  Smol:     ${COLORS.dim}${omp.smolModel}${COLORS.reset}`);
+  if (omp?.slowModel) lines.push(`  Slow:     ${COLORS.dim}${omp.slowModel}${COLORS.reset}`);
+  return lines.join("\n");
+}
+
+async function ompQuickSetup(port) {
+  const { endpoint } = await getEndpoint(port);
+  const apiKey = await getFirstApiKey();
+
+  if (!apiKey) {
+    showStatus("No API keys found. Create one in API Keys menu first.", "error");
+    await pause();
+    return;
+  }
+
+  const model = await selectModelFromList("Select Primary Model for Oh My Pi", "", { excludeCombos: true });
+  if (!model) return;
+
+  const result = await api.applyCliToolSettings("omp", { baseUrl: endpoint, apiKey, model, models: [model], activeModel: model });
+  showStatus(result.success ? "Oh My Pi (OMP) setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
+  await pause();
+}
+
+async function ompReset() {
+  const result = await api.resetCliToolSettings("omp");
+  showStatus(result.success ? "Oh My Pi settings reset!" : `Failed: ${result.error}`, result.success ? "success" : "error");
+  await pause();
+}
+
+async function showOmpMenu(port, breadcrumb = []) {
+  await showMenuWithBack({
+    title: "🥧 Oh My Pi (OMP) Settings",
+    breadcrumb,
+    headerContent: buildOmpHeader,
+    refresh: async () => ({}),
+    items: [
+      { label: "⚡ Quick Setup", action: async () => { await ompQuickSetup(port); return true; } },
+      { label: "Reset to Default", action: async () => { await ompReset(); return true; } }
+    ]
+  });
+}
+
 // ─── Main CLI Tools Menu ──────────────────────────────────────────────────────
 
 /**
@@ -610,7 +676,11 @@ async function showCliToolsMenu(port, breadcrumb = []) {
       {
         label: "Hermes",
         action: async () => { await showHermesMenu(port, [...breadcrumb, "Hermes"]); return true; }
-      }
+      },
+      {
+        label: "Oh My Pi (OMP)",
+        action: async () => { await showOmpMenu(port, [...breadcrumb, "Oh My Pi"]); return true; }
+      },
     ]
   });
 }

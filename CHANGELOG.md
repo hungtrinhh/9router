@@ -1,3 +1,9 @@
+# v0.5.61 (2026-08-22)
+
+## Features
+- **CLI Tools**: add Oh My Pi (OMP) integration with support for primary, smol, slow, plan models, and subagent model overrides
+- **Providers**: populate default static model catalog for OpenCode Free
+
 # v0.5.60 (2026-08-16)
 
 ## Fixes

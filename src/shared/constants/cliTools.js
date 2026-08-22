@@ -460,6 +460,36 @@ gemini extensions install https://github.com/manalkaff/opendesign
 # Fetch and follow .opencode/INSTALL.md from the repo`,
     },
   },
+  omp: {
+    id: "omp",
+    name: "Oh My Pi",
+    image: "/providers/omp.png",
+    color: "#7C3AED",
+    description: "Oh My Pi (OMP) terminal AI coding harness",
+    configType: "custom",
+    docsUrl: "https://github.com/can1357/oh-my-pi",
+    defaultCommand: "omp",
+    notes: [
+      {
+        type: "info",
+        text: "Oh My Pi (OMP) is an ultra-fast coding harness with subagent delegation, AST tools, native shell interaction, and persistent memory.",
+      },
+      {
+        type: "info",
+        text: "9Router configures the '9router' provider in ~/.omp/agent/models.yml and sets model roles (default, smol, slow, plan) in ~/.omp/agent/config.yml.",
+      },
+      {
+        type: "warning",
+        text: "Config path: Linux/macOS ~/.omp/agent/models.yml • Windows %USERPROFILE%\\.omp\\agent\\models.yml",
+      },
+    ],
+    defaultModels: [
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", alias: "sonnet", defaultValue: "cc/claude-sonnet-4-6" },
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6", alias: "opus", defaultValue: "cc/claude-opus-4-6" },
+      { id: "gpt-5.5", name: "GPT 5.5", alias: "gpt5", defaultValue: "cx/gpt-5.5" },
+      { id: "gemini-3.7-flash", name: "Gemini 3.7 Flash", alias: "flash", defaultValue: "gemini/gemini-3.7-flash" },
+    ],
+  },
   // HIDDEN: gemini-cli
   // "gemini-cli": {
   //   id: "gemini-cli",
