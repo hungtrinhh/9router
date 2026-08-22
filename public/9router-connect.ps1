@@ -1,6 +1,6 @@
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet("claude", "codex", "opencode")]
+  [ValidateSet("claude", "codex", "opencode", "omp")]
   [string]$Tool,
 
   [Parameter(Mandatory = $true)]
@@ -188,6 +188,51 @@ elseif ($Tool -eq "opencode") {
     Set-ObjectProperty $config "model" "9router/$Model"
   }
   Write-JsonObject $path $config
+}
+elseif ($Tool -eq "omp") {
+  $directory = Join-Path $HOME ".omp\agent"
+  $modelsPath = Join-Path $directory "models.yml"
+  $configPath = Join-Path $directory "config.yml"
+  if (-not (Test-Path -LiteralPath $directory)) {
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+  }
+  Backup-ConfigFile $modelsPath
+  Backup-ConfigFile $configPath
+
+  $hasModel = -not [string]::IsNullOrWhiteSpace($Model)
+  $modelId = if ($hasModel) { $Model } else { "claude-sonnet-4-6" }
+  $escapedUrl = $BaseUrl.Replace("\", "\\").Replace('"', '\"')
+  $escapedKey = $ApiKey.Replace("\", "\\").Replace('"', '\"')
+  $escapedModel = $modelId.Replace("\", "\\").Replace('"', '\"')
+
+  $modelsYaml = @"
+providers:
+  9router:
+    baseUrl: "$escapedUrl"
+    apiKey: "$escapedKey"
+    api: "openai-completions"
+    models:
+      - id: "$escapedModel"
+        name: "$escapedModel"
+        contextWindow: 200000
+        maxTokens: 8192
+        reasoning: true
+        input:
+          - "text"
+          - "image"
+"@
+
+  $configYaml = @"
+modelRoles:
+  default: "9router/$escapedModel"
+  smol: "9router/$escapedModel"
+  slow: "9router/$escapedModel"
+"@
+
+  $utf8 = New-Object Text.UTF8Encoding($false)
+  [IO.File]::WriteAllText($modelsPath, $modelsYaml + [Environment]::NewLine, $utf8)
+  [IO.File]::WriteAllText($configPath, $configYaml + [Environment]::NewLine, $utf8)
+  $path = $modelsPath
 }
 else {
   $directory = Join-Path $HOME ".codex"

@@ -1,3 +1,8 @@
+# v0.5.62 (2026-08-22)
+
+## Features
+- **CLI Tools**: add Windows `.bat`, macOS `.command`, and Linux setup scripts generation for Oh My Pi (OMP)
+
 # v0.5.61 (2026-08-22)
 
 ## Features

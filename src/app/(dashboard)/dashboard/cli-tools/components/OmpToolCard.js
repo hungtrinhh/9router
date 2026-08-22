@@ -5,6 +5,7 @@ import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/comp
 import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
+import BashSetupButton from "./BashSetupButton";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 
 const ENDPOINT = "/api/cli-tools/omp-settings";
@@ -479,6 +480,13 @@ ${modelEntries}`;
                   </div>
                 </div>
                 <div className="flex items-center gap-2 pl-9">
+                  <BashSetupButton
+                    tool="omp"
+                    baseUrl={getEffectiveBaseUrl()}
+                    apiKey={selectedApiKey}
+                    model={selectedModel || "claude-sonnet-4-6"}
+                    className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
+                  />
                   <Button
                     variant="secondary"
                     size="sm"
@@ -703,6 +711,13 @@ ${modelEntries}`;
                   <span className="material-symbols-outlined text-[14px] mr-1">content_copy</span>
                   Manual Config
                 </Button>
+                <BashSetupButton
+                  tool="omp"
+                  baseUrl={getEffectiveBaseUrl()}
+                  apiKey={selectedApiKey}
+                  model={selectedModel || "claude-sonnet-4-6"}
+                  variant="ghost"
+                />
               </div>
             </>
           )}

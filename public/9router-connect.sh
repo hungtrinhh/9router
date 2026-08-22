@@ -16,7 +16,7 @@ usage() {
 Configure a local AI CLI to use a remote 9Router server.
 
 Usage:
-  $PROGRAM_NAME --tool <claude|codex|opencode> --url <url> --model <model> [options]
+  $PROGRAM_NAME --tool <claude|codex|opencode|omp> --url <url> --model <model> [options]
 
 Options:
   --tool <name>       CLI tool to configure
@@ -93,9 +93,9 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$TOOL" in
-  claude|codex|opencode) ;;
+  claude|codex|opencode|omp) ;;
   "") die "--tool is required" ;;
-  *) die "unsupported tool '$TOOL' (use claude, codex, or opencode)" ;;
+  *) die "unsupported tool '$TOOL' (use claude, codex, opencode, or omp)" ;;
 esac
 
 [ -n "$BASE_URL" ] || die "--url or NINEROUTER_URL is required"
@@ -253,6 +253,42 @@ elif tool == "opencode":
         }
         config["model"] = f"9router/{model}"
     write_json(path, config)
+
+elif tool == "omp":
+    directory = home / ".omp" / "agent"
+    directory.mkdir(parents=True, exist_ok=True)
+    models_path = directory / "models.yml"
+    config_path = directory / "config.yml"
+    for p in (models_path, config_path):
+        saved = backup(p)
+        if saved:
+            backups.append(saved)
+    model_id = model if model else "claude-sonnet-4-6"
+    models_yaml = (
+        "providers:\n"
+        "  9router:\n"
+        f'    baseUrl: "{base_url}"\n'
+        f'    apiKey: "{api_key}"\n'
+        '    api: "openai-completions"\n'
+        "    models:\n"
+        f'      - id: "{model_id}"\n'
+        f'        name: "{model_id}"\n'
+        "        contextWindow: 200000\n"
+        "        maxTokens: 8192\n"
+        "        reasoning: true\n"
+        '        input: ["text", "image"]\n'
+    )
+    config_yaml = (
+        "modelRoles:\n"
+        f'  default: "9router/{model_id}"\n'
+        f'  smol: "9router/{model_id}"\n'
+        f'  slow: "9router/{model_id}"\n'
+    )
+    models_path.write_text(models_yaml, encoding="utf-8")
+    config_path.write_text(config_yaml, encoding="utf-8")
+    models_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    path = models_path
 
 else:
     directory = home / ".codex"
