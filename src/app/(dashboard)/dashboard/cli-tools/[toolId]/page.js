@@ -8,7 +8,6 @@ import ToolDetailClient from "./ToolDetailClient";
 export default async function ToolDetailPage({ params }) {
   const { toolId } = await params;
   if (!CLI_TOOLS[toolId]) notFound();
-  const [machineId, requestHeaders] = await Promise.all([getMachineId(), headers()]);
-  const canManageLocalSettings = isLocalRequest({ headers: requestHeaders });
-  return <ToolDetailClient toolId={toolId} machineId={machineId} canManageLocalSettings={canManageLocalSettings} />;
+  const [machineId] = await Promise.all([getMachineId()]);
+  return <ToolDetailClient toolId={toolId} machineId={machineId} canManageLocalSettings={true} />;
 }

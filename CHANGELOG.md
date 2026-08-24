@@ -1,3 +1,8 @@
+# v0.5.66 (2026-08-24)
+
+## Fixes
+- **CLI Tools**: remove remote-access restrictions that blocked Apply, Reset, and auto-saving when the dashboard was accessed via custom domains, reverse proxies, or Cloudflare tunnels
+
 # v0.5.65 (2026-08-24)
 
 ## Features

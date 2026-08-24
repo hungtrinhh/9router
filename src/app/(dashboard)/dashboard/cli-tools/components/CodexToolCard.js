@@ -100,7 +100,6 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   const debounceTimerRef = useRef(null);
 
   const handleApplySettings = async (overrides = {}) => {
-    if (!canManageLocalSettings) return;
     const currentModel = "model" in overrides ? overrides.model : selectedModel;
     const currentSubagent = "subagentModel" in overrides ? overrides.subagentModel : subagentModel;
     const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
@@ -424,10 +423,10 @@ model = "${effectiveSubagentModel}"
               )}
 
               <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
-                <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={!canManageLocalSettings || (!selectedApiKey && (cloudEnabled && apiKeys.length > 0)) || !selectedModel} loading={applying}>
+                <Button variant="primary" size="sm" onClick={handleApplySettings} disabled={(!selectedApiKey && (cloudEnabled && apiKeys.length > 0)) || !selectedModel} loading={applying}>
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={!canManageLocalSettings || restoring} loading={restoring}>
+                <Button variant="outline" size="sm" onClick={handleResetSettings} disabled={restoring} loading={restoring}>
                   <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => setShowManualConfigModal(true)}>

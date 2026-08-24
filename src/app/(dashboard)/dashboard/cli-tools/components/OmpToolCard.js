@@ -216,8 +216,6 @@ export default function OmpToolCard({
   const debounceTimerRef = useRef(null);
 
   const handleApplySettings = async (overrides = {}) => {
-    if (!canManageLocalSettings) return;
-
     const currentSelectedModel = "selectedModel" in overrides ? overrides.selectedModel : selectedModel;
     const currentSmolModel = "smolModel" in overrides ? overrides.smolModel : smolModel;
     const currentSlowModel = "slowModel" in overrides ? overrides.slowModel : slowModel;
@@ -761,7 +759,7 @@ ${modelEntries}`;
                   variant="primary"
                   size="sm"
                   onClick={handleApplySettings}
-                  disabled={!canManageLocalSettings || !selectedModel}
+                  disabled={!selectedModel}
                   loading={applying}
                 >
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
@@ -770,7 +768,7 @@ ${modelEntries}`;
                   variant="outline"
                   size="sm"
                   onClick={handleResetSettings}
-                  disabled={!canManageLocalSettings || !ompStatus?.has9Router}
+                  disabled={!ompStatus?.has9Router}
                   loading={restoring}
                 >
                   <span className="material-symbols-outlined text-[14px] mr-1">restore</span>Reset
