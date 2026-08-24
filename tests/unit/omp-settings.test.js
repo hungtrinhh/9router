@@ -85,4 +85,30 @@ describe("Oh My Pi (OMP) CLI Tool", () => {
     expect(parsed["task.agentModelOverrides"].scout).toBe("9router/gemini-2.5-flash");
     expect(parsed["task.agentModelOverrides"].reviewer).toBe("9router/claude-opus-4-6");
   });
+
+  it("supports multi-model definitions in models.yml for OMP", () => {
+    const modelIds = ["claude-sonnet-4-6", "gemini-2.5-flash", "claude-opus-4-6", "gpt-4o"];
+    const modelsData = {
+      providers: {
+        "9router": {
+          baseUrl: "http://127.0.0.1:20128/v1",
+          apiKey: "sk-9router",
+          api: "openai-completions",
+          models: modelIds.map((id) => ({
+            id,
+            name: id,
+            contextWindow: 200000,
+            maxTokens: 8192,
+            reasoning: true,
+            input: ["text", "image"],
+          })),
+        },
+      },
+    };
+
+    const yamlStr = stringifyYAML(modelsData);
+    const parsed = parseYAML(yamlStr);
+    expect(parsed.providers["9router"].models).toHaveLength(4);
+    expect(parsed.providers["9router"].models.map((m) => m.id)).toEqual(modelIds);
+  });
 });

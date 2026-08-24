@@ -517,6 +517,10 @@ ${modelEntries}`;
                     baseUrl={getEffectiveBaseUrl()}
                     apiKey={selectedApiKey}
                     model={selectedModel || "claude-sonnet-4-6"}
+                    smolModel={smolModel}
+                    slowModel={slowModel}
+                    planModel={planModel}
+                    subagentModels={subagentModels}
                     className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
                   />
                   <Button
@@ -782,6 +786,10 @@ ${modelEntries}`;
                   baseUrl={getEffectiveBaseUrl()}
                   apiKey={selectedApiKey}
                   model={selectedModel || "claude-sonnet-4-6"}
+                  smolModel={smolModel}
+                  slowModel={slowModel}
+                  planModel={planModel}
+                  subagentModels={subagentModels}
                   variant="ghost"
                 />
               </div>

@@ -7,10 +7,14 @@ TOOL=""
 BASE_URL="${NINEROUTER_URL:-}"
 API_KEY="${NINEROUTER_KEY:-}"
 MODEL="${NINEROUTER_MODEL:-}"
+SMOL_MODEL="${NINEROUTER_SMOL_MODEL:-}"
+SLOW_MODEL="${NINEROUTER_SLOW_MODEL:-}"
+PLAN_MODEL="${NINEROUTER_PLAN_MODEL:-}"
+SUBAGENTS="${NINEROUTER_SUBAGENTS:-}"
+MODELS_LIST="${NINEROUTER_MODELS:-}"
 ALLOW_HTTP=0
 SKIP_CHECK=0
 NO_PROMPT=0
-
 usage() {
   cat <<EOF
 Configure a local AI CLI to use a remote 9Router server.
@@ -68,6 +72,31 @@ while [ "$#" -gt 0 ]; do
     --model)
       need_value "$@"
       MODEL="$2"
+      shift 2
+      ;;
+    --smol-model)
+      need_value "$@"
+      SMOL_MODEL="$2"
+      shift 2
+      ;;
+    --slow-model)
+      need_value "$@"
+      SLOW_MODEL="$2"
+      shift 2
+      ;;
+    --plan-model)
+      need_value "$@"
+      PLAN_MODEL="$2"
+      shift 2
+      ;;
+    --subagents)
+      need_value "$@"
+      SUBAGENTS="$2"
+      shift 2
+      ;;
+    --models)
+      need_value "$@"
+      MODELS_LIST="$2"
       shift 2
       ;;
     --allow-http)
@@ -162,8 +191,12 @@ fi
 export NINEROUTER_CONNECT_URL="$API_URL"
 export NINEROUTER_CONNECT_KEY="$API_KEY"
 export NINEROUTER_CONNECT_MODEL="$MODEL"
+export NINEROUTER_CONNECT_SMOL_MODEL="$SMOL_MODEL"
+export NINEROUTER_CONNECT_SLOW_MODEL="$SLOW_MODEL"
+export NINEROUTER_CONNECT_PLAN_MODEL="$PLAN_MODEL"
+export NINEROUTER_CONNECT_SUBAGENTS="$SUBAGENTS"
+export NINEROUTER_CONNECT_MODELS="$MODELS_LIST"
 export NINEROUTER_CONNECT_HOME="${NINEROUTER_HOME:-$HOME}"
-
 python3 - "$TOOL" <<'PY'
 import json
 import os
@@ -263,10 +296,78 @@ elif tool == "omp":
         saved = backup(p)
         if saved:
             backups.append(saved)
-    model_id = model if model else "claude-sonnet-4-6"
-    escaped_model = model_id.replace("\\", "\\\\").replace('"', '\\"')
+
+    default_model = model.strip() if model and model.strip() else "claude-sonnet-4-6"
+    smol_model = os.environ.get("NINEROUTER_CONNECT_SMOL_MODEL", "").strip()
+    slow_model = os.environ.get("NINEROUTER_CONNECT_SLOW_MODEL", "").strip()
+    plan_model = os.environ.get("NINEROUTER_CONNECT_PLAN_MODEL", "").strip()
+    subagents_raw = os.environ.get("NINEROUTER_CONNECT_SUBAGENTS", "").strip()
+    models_raw = os.environ.get("NINEROUTER_CONNECT_MODELS", "").strip()
+
+    subagents = {}
+    if subagents_raw:
+        try:
+            subagents = json.loads(subagents_raw)
+            if not isinstance(subagents, dict):
+                subagents = {}
+        except Exception:
+            subagents = {}
+
+    all_models = [default_model]
+    if smol_model:
+        all_models.append(smol_model)
+    if slow_model:
+        all_models.append(slow_model)
+    if plan_model:
+        all_models.append(plan_model)
+    for v in subagents.values():
+        if isinstance(v, str) and v.strip():
+            clean_v = v.strip().replace("9router/", "")
+            if clean_v:
+                all_models.append(clean_v)
+    if models_raw:
+        for m in models_raw.split(","):
+            if m.strip():
+                all_models.append(m.strip())
+
+    # Include catalog models if available
+    try:
+        import urllib.request
+        req = urllib.request.Request(f"{base_url}/models", headers={"Authorization": f"Bearer {api_key}"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            for item in data.get("data", []):
+                mid = item.get("id")
+                if mid and mid not in all_models:
+                    all_models.append(mid)
+    except Exception:
+        pass
+
+    # Deduplicate preserving order
+    seen = set()
+    unique_models = []
+    for m in all_models:
+        if m not in seen:
+            seen.add(m)
+            unique_models.append(m)
+
     escaped_url = base_url.replace("\\", "\\\\").replace('"', '\\"')
     escaped_key = api_key.replace("\\", "\\\\").replace('"', '\\"')
+
+    model_entries = []
+    for mid in unique_models:
+        esc_mid = mid.replace("\\", "\\\\").replace('"', '\\"')
+        model_entries.append(
+            f'      - id: "{esc_mid}"\n'
+            f'        name: "{esc_mid}"\n'
+            f'        contextWindow: 200000\n'
+            f'        maxTokens: 8192\n'
+            f'        reasoning: true\n'
+            f'        input:\n'
+            f'          - "text"\n'
+            f'          - "image"'
+        )
+    models_entries_str = "\n".join(model_entries)
 
     nine_router_block = (
         "  9router:\n"
@@ -274,46 +375,76 @@ elif tool == "omp":
         f'    apiKey: "{escaped_key}"\n'
         '    api: "openai-completions"\n'
         "    models:\n"
-        f'      - id: "{escaped_model}"\n'
-        f'        name: "{escaped_model}"\n'
-        "        contextWindow: 200000\n"
-        "        maxTokens: 8192\n"
-        "        reasoning: true\n"
-        '        input: ["text", "image"]'
+        f"{models_entries_str}\n"
     )
-    roles_block = (
-        "modelRoles:\n"
-        f'  default: "9router/{escaped_model}"\n'
-        f'  smol: "9router/{escaped_model}"\n'
-        f'  slow: "9router/{escaped_model}"'
-    )
+
+    esc_default = default_model.replace("\\", "\\\\").replace('"', '\\"')
+    esc_smol = smol_model.replace("\\", "\\\\").replace('"', '\\"') if smol_model else esc_default
+    esc_slow = slow_model.replace("\\", "\\\\").replace('"', '\\"') if slow_model else esc_default
+    esc_plan = plan_model.replace("\\", "\\\\").replace('"', '\\"') if plan_model else ""
+
+    role_lines = [
+        "modelRoles:",
+        f'  default: "9router/{esc_default}"',
+        f'  smol: "9router/{esc_smol}"',
+        f'  slow: "9router/{esc_slow}"',
+    ]
+    if esc_plan:
+        role_lines.append(f'  plan: "9router/{esc_plan}"')
+    roles_block = "\n".join(role_lines)
+
+    subagent_lines = []
+    for agent_name, agent_val in subagents.items():
+        if isinstance(agent_val, str) and agent_val.strip():
+            clean_val = agent_val.strip().replace("9router/", "")
+            esc_val = clean_val.replace("\\", "\\\\").replace('"', '\\"')
+            subagent_lines.append(f'  {agent_name}: "9router/{esc_val}"')
+
+    subagents_block = ""
+    if subagent_lines:
+        subagents_block = "task.agentModelOverrides:\n" + "\n".join(subagent_lines)
 
     models_content = models_path.read_text(encoding="utf-8") if models_path.exists() else ""
     if not models_content.strip():
-        new_models_content = f"providers:\n{nine_router_block}\n"
+        new_models_content = f"providers:\n{nine_router_block}"
     else:
-        models_content = re.sub(r'(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\z)', '', models_content)
-        if re.search(r'(?m)^providers:\s*$', models_content):
-            new_models_content = re.sub(r'(?m)^providers:\s*$', f"providers:\n{nine_router_block}", models_content, count=1)
+        models_content = re.sub(
+            r"(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\Z)",
+            "",
+            models_content,
+        )
+        if re.search(r"(?m)^providers:\s*$", models_content):
+            new_models_content = re.sub(
+                r"(?m)^providers:\s*$",
+                f"providers:\n{nine_router_block}".rstrip(),
+                models_content,
+                count=1,
+            )
         else:
-            new_models_content = f"providers:\n{nine_router_block}\n\n" + models_content.lstrip()
+            new_models_content = f"providers:\n{nine_router_block}\n" + models_content.lstrip()
 
     config_content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
     if not config_content.strip():
-        new_config_content = f"{roles_block}\n"
+        parts = [roles_block]
+        if subagents_block:
+            parts.append(subagents_block)
+        new_config_content = "\n\n".join(parts) + "\n"
     else:
-        config_content = re.sub(r'(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_-]+:|\z)', '', config_content).strip()
+        config_content = re.sub(r"(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", config_content).strip()
+        if subagents_block:
+            config_content = re.sub(r"(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", config_content).strip()
+        parts = [roles_block]
+        if subagents_block:
+            parts.append(subagents_block)
         if config_content:
-            new_config_content = f"{roles_block}\n\n{config_content}\n"
-        else:
-            new_config_content = f"{roles_block}\n"
+            parts.append(config_content)
+        new_config_content = "\n\n".join(parts) + "\n"
 
     models_path.write_text(new_models_content.rstrip() + "\n", encoding="utf-8")
-    config_path.write_text(new_config_content.rstrip() + "\n", encoding="utf-8")
     models_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    config_path.write_text(new_config_content.rstrip() + "\n", encoding="utf-8")
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     path = models_path
-
 else:
     directory = home / ".codex"
     config_path = directory / "config.toml"

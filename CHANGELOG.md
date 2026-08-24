@@ -1,3 +1,8 @@
+# v0.5.68 (2026-08-24)
+
+## Fixes
+- **CLI Tools**: sync all configured models, model roles (default, smol, slow, plan), and subagent overrides when generating Oh My Pi (OMP) setup scripts (`.bat`, `.sh`, `.command`), and auto-populate all available 9Router models into OMP's `models.yml` for `/model` discovery
+
 # v0.5.67 (2026-08-24)
 
 ## Fixes

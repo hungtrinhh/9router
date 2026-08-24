@@ -10,6 +10,16 @@ param(
 
   [string]$ApiKey = "",
 
+  [string]$SmolModel = "",
+
+  [string]$SlowModel = "",
+
+  [string]$PlanModel = "",
+
+  [string]$SubagentModelsJson = "",
+
+  [string[]]$Models = @(),
+
   [switch]$NoPrompt
 )
 
@@ -120,16 +130,19 @@ if ([string]::IsNullOrWhiteSpace($Model) -and -not $NoPrompt) {
 
 # Mirror the dashboard Apply behavior: when no model is configured, write the
 # connection without model fields instead of prompting for one.
-if (-not [string]::IsNullOrWhiteSpace($Model)) {
+$catalogModelIds = @()
+if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
   try {
     $headers = @{ Authorization = "Bearer $ApiKey" }
     $catalog = Invoke-RestMethod -Uri "$BaseUrl/models" -Headers $headers -Method Get
-    $modelIds = @($catalog.data | ForEach-Object { $_.id })
-    if ($Model -notin $modelIds) {
+    $catalogModelIds = @($catalog.data | ForEach-Object { $_.id })
+    if (-not [string]::IsNullOrWhiteSpace($Model) -and $catalogModelIds.Count -gt 0 -and $Model -notin $catalogModelIds) {
       throw "Model '$Model' was not returned by /v1/models"
     }
   } catch {
-    throw "Could not validate the API key and model: $($_.Exception.Message)"
+    if (-not [string]::IsNullOrWhiteSpace($Model) -and $_.Exception.Message -match "was not returned by /v1/models") {
+      throw $_.Exception.Message
+    }
   }
 }
 
@@ -201,11 +214,82 @@ elseif ($Tool -eq "omp") {
   Backup-ConfigFile $modelsPath
   Backup-ConfigFile $configPath
 
-  $hasModel = -not [string]::IsNullOrWhiteSpace($Model)
-  $modelId = if ($hasModel) { $Model } else { "claude-sonnet-4-6" }
+  $defaultModel = if (-not [string]::IsNullOrWhiteSpace($Model)) { $Model.Trim() } else { "claude-sonnet-4-6" }
+  $subagents = $null
+  if (-not [string]::IsNullOrWhiteSpace($SubagentModelsJson)) {
+    try {
+      $subagents = $SubagentModelsJson | ConvertFrom-Json
+    } catch {
+      $subagents = $null
+    }
+  }
+
+  $allModelIds = New-Object System.Collections.Generic.List[string]
+  $allModelIds.Add($defaultModel)
+
+  if (-not [string]::IsNullOrWhiteSpace($SmolModel) -and $SmolModel.Trim()) {
+    $allModelIds.Add($SmolModel.Trim())
+  }
+  if (-not [string]::IsNullOrWhiteSpace($SlowModel) -and $SlowModel.Trim()) {
+    $allModelIds.Add($SlowModel.Trim())
+  }
+  if (-not [string]::IsNullOrWhiteSpace($PlanModel) -and $PlanModel.Trim()) {
+    $allModelIds.Add($PlanModel.Trim())
+  }
+
+  if ($null -ne $subagents) {
+    foreach ($prop in $subagents.PSObject.Properties) {
+      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $cleanSubVal = [string]($prop.Value)
+        $cleanSubVal = $cleanSubVal -replace "^9router/", ""
+        if (-not [string]::IsNullOrWhiteSpace($cleanSubVal)) {
+          $allModelIds.Add($cleanSubVal.Trim())
+        }
+      }
+    }
+  }
+
+  if ($null -ne $Models -and $Models.Count -gt 0) {
+    foreach ($m in $Models) {
+      if (-not [string]::IsNullOrWhiteSpace($m)) {
+        $allModelIds.Add($m.Trim())
+      }
+    }
+  }
+
+  if ($null -ne $catalogModelIds -and $catalogModelIds.Count -gt 0) {
+    foreach ($cm in $catalogModelIds) {
+      if (-not [string]::IsNullOrWhiteSpace($cm)) {
+        $allModelIds.Add($cm.Trim())
+      }
+    }
+  }
+
+  $uniqueModelIds = New-Object System.Collections.Generic.List[string]
+  foreach ($mid in $allModelIds) {
+    if (-not $uniqueModelIds.Contains($mid)) {
+      $uniqueModelIds.Add($mid)
+    }
+  }
+
   $escapedUrl = $BaseUrl.Replace("\", "\\").Replace('"', '\"')
   $escapedKey = $ApiKey.Replace("\", "\\").Replace('"', '\"')
-  $escapedModel = $modelId.Replace("\", "\\").Replace('"', '\"')
+
+  $modelEntries = New-Object System.Collections.Generic.List[string]
+  foreach ($mid in $uniqueModelIds) {
+    $escMid = $mid.Replace("\", "\\").Replace('"', '\"')
+    $modelEntries.Add(@"
+      - id: "$escMid"
+        name: "$escMid"
+        contextWindow: 200000
+        maxTokens: 8192
+        reasoning: true
+        input:
+          - "text"
+          - "image"
+"@)
+  }
+  $modelsYamlString = $modelEntries -join "`r`n"
 
   $nineRouterBlock = @"
   9router:
@@ -213,22 +297,41 @@ elseif ($Tool -eq "omp") {
     apiKey: "$escapedKey"
     api: "openai-completions"
     models:
-      - id: "$escapedModel"
-        name: "$escapedModel"
-        contextWindow: 200000
-        maxTokens: 8192
-        reasoning: true
-        input:
-          - "text"
-          - "image"
+$modelsYamlString
 "@
 
-  $rolesBlock = @"
-modelRoles:
-  default: "9router/$escapedModel"
-  smol: "9router/$escapedModel"
-  slow: "9router/$escapedModel"
-"@
+  $escDefault = $defaultModel.Replace("\", "\\").Replace('"', '\"')
+  $escSmol = if (-not [string]::IsNullOrWhiteSpace($SmolModel)) { $SmolModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { $escDefault }
+  $escSlow = if (-not [string]::IsNullOrWhiteSpace($SlowModel)) { $SlowModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { $escDefault }
+  $escPlan = if (-not [string]::IsNullOrWhiteSpace($PlanModel)) { $PlanModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { "" }
+
+  $roleLines = New-Object System.Collections.Generic.List[string]
+  $roleLines.Add("modelRoles:")
+  $roleLines.Add("  default: `"9router/$escDefault`"")
+  $roleLines.Add("  smol: `"9router/$escSmol`"")
+  $roleLines.Add("  slow: `"9router/$escSlow`"")
+  if (-not [string]::IsNullOrWhiteSpace($escPlan)) {
+    $roleLines.Add("  plan: `"9router/$escPlan`"")
+  }
+  $rolesBlock = $roleLines -join "`r`n"
+
+  $subagentLines = New-Object System.Collections.Generic.List[string]
+  if ($null -ne $subagents) {
+    foreach ($prop in $subagents.PSObject.Properties) {
+      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $agentName = $prop.Name.Trim()
+        $agentVal = [string]($prop.Value)
+        $agentVal = $agentVal -replace "^9router/", ""
+        $escAgentVal = $agentVal.Trim().Replace("\", "\\").Replace('"', '\"')
+        $subagentLines.Add("  ${agentName}: `"9router/$escAgentVal`"")
+      }
+    }
+  }
+
+  $subagentsBlock = ""
+  if ($subagentLines.Count -gt 0) {
+    $subagentsBlock = "task.agentModelOverrides:`r`n" + ($subagentLines -join "`r`n")
+  }
 
   $modelsContent = if (Test-Path -LiteralPath $modelsPath) { [IO.File]::ReadAllText($modelsPath) } else { "" }
   if ([string]::IsNullOrWhiteSpace($modelsContent)) {
@@ -244,14 +347,26 @@ modelRoles:
 
   $configContent = if (Test-Path -LiteralPath $configPath) { [IO.File]::ReadAllText($configPath) } else { "" }
   if ([string]::IsNullOrWhiteSpace($configContent)) {
-    $newConfigContent = "$rolesBlock`r`n"
-  } else {
-    $configContent = [Regex]::Replace($configContent, "(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_-]+:|\z)", "").Trim()
-    if (-not [string]::IsNullOrWhiteSpace($configContent)) {
-      $newConfigContent = "$rolesBlock`r`n`r`n$configContent`r`n"
-    } else {
-      $newConfigContent = "$rolesBlock`r`n"
+    $blocks = New-Object System.Collections.Generic.List[string]
+    $blocks.Add($rolesBlock)
+    if ($subagentsBlock) {
+      $blocks.Add($subagentsBlock)
     }
+    $newConfigContent = ($blocks -join "`r`n`r`n") + "`r`n"
+  } else {
+    $configContent = [Regex]::Replace($configContent, "(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
+    if ($subagentsBlock) {
+      $configContent = [Regex]::Replace($configContent, "(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
+    }
+    $blocks = New-Object System.Collections.Generic.List[string]
+    $blocks.Add($rolesBlock)
+    if ($subagentsBlock) {
+      $blocks.Add($subagentsBlock)
+    }
+    if (-not [string]::IsNullOrWhiteSpace($configContent)) {
+      $blocks.Add($configContent)
+    }
+    $newConfigContent = ($blocks -join "`r`n`r`n") + "`r`n"
   }
 
   $utf8 = New-Object Text.UTF8Encoding($false)
