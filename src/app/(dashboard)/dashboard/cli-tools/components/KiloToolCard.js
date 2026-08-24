@@ -30,6 +30,12 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
   }, [initialStatus]);
 
   useEffect(() => {
+    if (status?.savedConfig?.model && !selectedModel) {
+      setSelectedModel(status.savedConfig.model);
+    }
+  }, [status]);
+
+  useEffect(() => {
     if (isExpanded) {
       if (!status) checkStatus();
       fetchModelAliases();

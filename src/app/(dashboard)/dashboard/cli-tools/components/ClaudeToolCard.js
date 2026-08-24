@@ -119,7 +119,7 @@ export default function ClaudeToolCard({
   useEffect(() => {
     if (claudeStatus?.installed && !hasInitializedModels.current) {
       hasInitializedModels.current = true;
-      const env = claudeStatus.settings?.env || {};
+      const env = claudeStatus.settings?.env || claudeStatus.savedConfig?.env || {};
 
       tool.defaultModels.forEach((model) => {
         if (model.envKey) {

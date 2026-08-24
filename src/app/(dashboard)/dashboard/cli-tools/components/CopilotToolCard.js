@@ -48,7 +48,11 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
       const entry = status.config.find((e) => e.name === "9Router");
       if (entry?.models?.length > 0) {
         setSelectedModels(entry.models.map((m) => m.id));
+      } else if (status?.savedConfig?.models?.length > 0) {
+        setSelectedModels(status.savedConfig.models);
       }
+    } else if (status?.savedConfig?.models?.length > 0 && selectedModels.length === 0) {
+      setSelectedModels(status.savedConfig.models);
     }
   }, [status]);
 

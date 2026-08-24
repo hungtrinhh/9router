@@ -60,6 +60,9 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
       // Parse subagent settings
       const subagentModelMatch = codexStatus.config.match(/\[agents\.subagent\]\s*\n\s*model\s*=\s*"([^"]+)"/m);
       if (subagentModelMatch) setSubagentModel(subagentModelMatch[1]);
+    } else if (codexStatus?.savedConfig) {
+      if (codexStatus.savedConfig.model && !selectedModel) setSelectedModel(codexStatus.savedConfig.model);
+      if (codexStatus.savedConfig.subagentModel && !subagentModel) setSubagentModel(codexStatus.savedConfig.subagentModel);
     }
   }, [codexStatus]);
 

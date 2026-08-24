@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import path from "path";
 import os from "os";
 
@@ -110,10 +111,12 @@ export async function GET() {
         }
         const toml = await readConfigToml();
         const config = parseToml(toml);
+        const savedConfig = await getCliToolConfig("deepseek-tui");
         return NextResponse.json({
             installed: true,
             settings: config,
             has9Router: has9RouterConfig(config),
+            savedConfig,
             configPath: getDeepSeekConfigPath(),
         });
     } catch (error) {
@@ -134,6 +137,9 @@ export async function POST(request) {
 
         const newConfig = build9RouterConfig(baseUrl, apiKey || "sk_9router", model);
         await fs.writeFile(getDeepSeekConfigPath(), newConfig);
+
+        // Save model settings to database for cross-machine sync
+        await setCliToolConfig("deepseek-tui", { model });
 
         return NextResponse.json({
             success: true,

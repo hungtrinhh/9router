@@ -10,6 +10,7 @@ import { UPDATER_CONFIG } from "@/shared/constants/config";
 import { getConsistentMachineId } from "@/shared/utils/machineId";
 
 const APP_PORT = UPDATER_CONFIG.appPort;
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 const CLI_TOKEN_HEADER = "x-9r-cli-token";
 const CLI_TOKEN_SALT = "9r-cli-auth";
 const LOCAL_MCP_PREFIX = `http://localhost:${APP_PORT}/api/mcp/`;
@@ -271,11 +272,13 @@ export async function GET() {
       .filter((m) => m.custom || (!stdioNames.has(m.name) && typeof m.url === "string" && m.url.includes("/api/mcp/")))
       .map((m) => ({ name: m.name, url: m.url, transport: m.transport, custom: true }));
 
+    const savedConfig = await getCliToolConfig("cowork");
     return NextResponse.json({
       installed: true,
       config,
       has9Router,
       configPath,
+      savedConfig,
       cowork: {
         appliedId,
         baseUrl,
@@ -352,6 +355,14 @@ export async function POST(request) {
     let localMcpResult = { applied: localPluginNames, via: "3p-sse-bridge" };
     try { await cleanup1pLegacy(); } catch { /* ignore */ }
 
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("cowork", {
+      models: modelsArray,
+      plugins: pluginsArray,
+      localPlugins: localPluginNames,
+      customPlugins: customPluginsArray,
+    });
     return NextResponse.json({
       success: true,
       bootstrapped,

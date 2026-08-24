@@ -68,7 +68,7 @@ async function buildClaudeHeader() {
  */
 async function getClaudeModel(envKey) {
   const result = await api.getCliToolSettings("claude");
-  return result.success ? (result.data.settings?.env?.[envKey] || "Not set") : "Not set";
+  return result.success ? (result.data.settings?.env?.[envKey] || result.data.savedConfig?.env?.[envKey] || "Not set") : "Not set";
 }
 
 /**
@@ -84,9 +84,11 @@ async function claudeQuickSetup(port) {
     await pause();
     return;
   }
+  const settingsResult = await api.getCliToolSettings("claude");
+  const savedEnv = settingsResult.data?.savedConfig?.env || settingsResult.data?.settings?.env || {};
 
   const env = { ANTHROPIC_BASE_URL: endpoint, ANTHROPIC_AUTH_TOKEN: apiKey, API_TIMEOUT_MS: "600000" };
-  CLAUDE_MODEL_TYPES.forEach(t => { env[t.envKey] = t.defaultValue; });
+  CLAUDE_MODEL_TYPES.forEach(t => { env[t.envKey] = savedEnv[t.envKey] || t.defaultValue; });
 
   const result = await api.applyCliToolSettings("claude", { env });
   showStatus(result.success ? "Quick Setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
@@ -215,12 +217,13 @@ async function codexQuickSetup(port) {
     return;
   }
 
-  // Get model selection
-  const model = await selectModelFromList("Select Codex Model", "cx/claude-sonnet-4-5-20250929", { excludeCombos: true });
+  const settingsResult = await api.getCliToolSettings("codex");
+  const defaultModel = settingsResult.data?.savedConfig?.model || "cx/claude-sonnet-4-5-20250929";
+  const model = await selectModelFromList("Select Codex Model", defaultModel, { excludeCombos: true });
   if (!model) return;
 
-  const result = await api.applyCliToolSettings("codex", { baseUrl: endpoint, apiKey, model });
-  showStatus(result.success ? "Codex setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
+  const subagentModel = settingsResult.data?.savedConfig?.subagentModel || model;
+  const result = await api.applyCliToolSettings("codex", { baseUrl: endpoint, apiKey, model, subagentModel });
   await pause();
 }
 
@@ -299,11 +302,14 @@ async function droidQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select Droid Model", "cc/claude-sonnet-4-5-20250929", { excludeCombos: true });
+  const settingsResult = await api.getCliToolSettings("droid");
+  const defaultModel = settingsResult.data?.savedConfig?.model || settingsResult.data?.savedConfig?.models?.[0] || "cc/claude-sonnet-4-5-20250929";
+  const model = await selectModelFromList("Select Droid Model", defaultModel, { excludeCombos: true });
   if (!model) return;
 
-  const result = await api.applyCliToolSettings("droid", { baseUrl: endpoint, apiKey, model });
-  showStatus(result.success ? "Factory Droid setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
+  const models = settingsResult.data?.savedConfig?.models?.length ? settingsResult.data.savedConfig.models : [model];
+  const activeModel = settingsResult.data?.savedConfig?.activeModel || model;
+  const result = await api.applyCliToolSettings("droid", { baseUrl: endpoint, apiKey, model, models, activeModel });
   await pause();
 }
 
@@ -384,11 +390,13 @@ async function openClawQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select OpenClaw Model", "cc/claude-sonnet-4-5-20250929", { excludeCombos: true });
+  const settingsResult = await api.getCliToolSettings("openclaw");
+  const defaultModel = settingsResult.data?.savedConfig?.model || "cc/claude-sonnet-4-5-20250929";
+  const model = await selectModelFromList("Select OpenClaw Model", defaultModel, { excludeCombos: true });
   if (!model) return;
 
-  const result = await api.applyCliToolSettings("openclaw", { baseUrl: endpoint, apiKey, model });
-  showStatus(result.success ? "Open Claw setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
+  const agentModels = settingsResult.data?.savedConfig?.agentModels || {};
+  const result = await api.applyCliToolSettings("openclaw", { baseUrl: endpoint, apiKey, model, agentModels });
   await pause();
 }
 
@@ -460,10 +468,10 @@ async function openCodeQuickSetup(port) {
     return;
   }
 
-  // Pick first model (also becomes active model by default)
-  const firstModel = await selectModelFromList("Select Active Model (OpenCode)", "", { excludeCombos: true });
+  const settingsResult = await api.getCliToolSettings("opencode");
+  const defaultModel = settingsResult.data?.savedConfig?.activeModel || settingsResult.data?.savedConfig?.models?.[0] || "";
+  const firstModel = await selectModelFromList("Select Active Model (OpenCode)", defaultModel, { excludeCombos: true });
   if (!firstModel) return;
-
   const models = [firstModel];
 
   // Optionally add more models
@@ -546,11 +554,12 @@ async function hermesQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select Hermes Model", "", { excludeCombos: true });
+  const settingsResult = await api.getCliToolSettings("hermes");
+  const defaultModel = settingsResult.data?.savedConfig?.model || "";
+  const model = await selectModelFromList("Select Hermes Model", defaultModel, { excludeCombos: true });
   if (!model) return;
 
   const result = await api.applyCliToolSettings("hermes", { baseUrl: endpoint, apiKey, model });
-  showStatus(result.success ? "Hermes setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
   await pause();
 }
 
@@ -612,11 +621,23 @@ async function ompQuickSetup(port) {
     return;
   }
 
-  const model = await selectModelFromList("Select Primary Model for Oh My Pi", "", { excludeCombos: true });
+  const settingsResult = await api.getCliToolSettings("omp");
+  const defaultModel = settingsResult.data?.savedConfig?.activeModel || settingsResult.data?.savedConfig?.model || "";
+  const model = await selectModelFromList("Select Primary Model for Oh My Pi", defaultModel, { excludeCombos: true });
   if (!model) return;
 
-  const result = await api.applyCliToolSettings("omp", { baseUrl: endpoint, apiKey, model, models: [model], activeModel: model });
-  showStatus(result.success ? "Oh My Pi (OMP) setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
+  const saved = settingsResult.data?.savedConfig || {};
+  const result = await api.applyCliToolSettings("omp", {
+    baseUrl: endpoint,
+    apiKey,
+    model,
+    models: saved.models || [model],
+    activeModel: model,
+    smolModel: saved.smolModel || "",
+    slowModel: saved.slowModel || "",
+    planModel: saved.planModel || "",
+    subagentModels: saved.subagentModels || {},
+  });
   await pause();
 }
 

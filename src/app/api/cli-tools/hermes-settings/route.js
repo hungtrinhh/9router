@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import path from "path";
 import os from "os";
 
@@ -106,11 +107,13 @@ export async function GET() {
       return NextResponse.json({ installed: false, settings: null, message: "Hermes Agent is not installed" });
     }
     const yaml = await readConfigYaml();
+    const savedConfig = await getCliToolConfig("hermes");
     const model = parseModelBlock(yaml);
     return NextResponse.json({
       installed: true,
       settings: { model },
       has9Router: has9RouterConfig(model),
+      savedConfig,
       configPath: getHermesConfigPath(),
     });
   } catch (error) {
@@ -142,6 +145,9 @@ export async function POST(request) {
       const newEnv = upsertEnvVar(existingEnv, API_KEY_ENV, apiKey);
       await fs.writeFile(getHermesEnvPath(), newEnv);
     }
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("hermes", { model });
 
     return NextResponse.json({
       success: true,

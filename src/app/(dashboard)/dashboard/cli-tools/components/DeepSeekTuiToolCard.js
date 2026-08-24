@@ -79,7 +79,11 @@ export default function DeepSeekTuiToolCard({
     if (deepseekStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
       const openaiSection = deepseekStatus.settings?.["providers.openai"];
-      if (openaiSection?.model) setSelectedModel(openaiSection.model);
+      if (openaiSection?.model) {
+        setSelectedModel(openaiSection.model);
+      } else if (deepseekStatus.savedConfig?.model) {
+        setSelectedModel(deepseekStatus.savedConfig.model);
+      }
     }
   }, [deepseekStatus]);
 

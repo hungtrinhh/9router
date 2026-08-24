@@ -1,3 +1,8 @@
+# v0.5.64 (2026-08-24)
+
+## Features
+- **CLI Tools**: persist model configurations across all CLI tools in 9Router's database (`data.sqlite`) and include them in database backup/restore for seamless cross-machine sync
+
 # v0.5.63 (2026-08-24)
 
 ## Fixes

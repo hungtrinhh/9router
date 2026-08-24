@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 
 // Resolve chatLanguageModels.json path per OS
 const getConfigPath = () => {
@@ -45,12 +46,14 @@ export async function GET() {
   try {
     const config = await readConfig();
     const entry = get9RouterEntry(config);
+    const savedConfig = await getCliToolConfig("copilot");
 
     return NextResponse.json({
       installed: true,
       config,
       has9Router: has9RouterConfig(config),
       configPath: getConfigPath(),
+      savedConfig,
       currentModel: entry?.models?.[0]?.id || null,
       currentUrl: entry?.models?.[0]?.url || null,
     });
@@ -108,6 +111,9 @@ export async function POST(request) {
 
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
 
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("copilot", { models });
     return NextResponse.json({
       success: true,
       message: "Copilot settings applied! Reload VS Code to take effect.",

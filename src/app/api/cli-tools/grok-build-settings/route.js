@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import {
   applyGrokBuildConfig,
   GROK_SUBAGENT_TYPES,
@@ -84,10 +85,12 @@ export async function GET() {
     }
 
     const settings = parseGrokBuildConfig(await readConfigToml());
+    const savedConfig = await getCliToolConfig("grok-build");
     return NextResponse.json({
       installed: true,
       settings,
       has9Router: has9RouterConfig(settings),
+      savedConfig,
       configPath: getGrokConfigPath(),
     });
   } catch (error) {
@@ -114,6 +117,13 @@ export async function POST(request) {
       subagentModels: normalizeSubagentModels(subagentModels),
     });
     await fs.writeFile(getGrokConfigPath(), toml);
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("grok-build", {
+      model: selectedModel,
+      contextWindow: normalizeContextWindow(contextWindow, selectedModel),
+      subagentModels: normalizeSubagentModels(subagentModels),
+    });
 
     return NextResponse.json({
       success: true,

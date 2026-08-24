@@ -103,7 +103,7 @@ export default function OmpToolCard({
   canManageLocalSettings = true,
 }) {
   const initialActiveModel =
-    initialStatus?.omp?.activeModel || initialStatus?.omp?.models?.[0] || "";
+    initialStatus?.omp?.activeModel || initialStatus?.omp?.models?.[0] || initialStatus?.savedConfig?.activeModel || initialStatus?.savedConfig?.model || "";
   const [ompStatus, setOmpStatus] = useState(initialStatus || null);
   const [checkingOmp, setCheckingOmp] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -140,12 +140,12 @@ export default function OmpToolCard({
 
   const hydrateForm = useCallback(
     (status) => {
-      const active = status?.omp?.activeModel || status?.omp?.models?.[0] || "";
+      const active = status?.omp?.activeModel || status?.omp?.models?.[0] || status?.savedConfig?.activeModel || status?.savedConfig?.model || "";
       setSelectedModel(active);
-      setSmolModel(status?.omp?.smolModel || "");
-      setSlowModel(status?.omp?.slowModel || "");
-      setPlanModel(status?.omp?.planModel || "");
-      setSubagentModels(status?.omp?.subagentModels || {});
+      setSmolModel(status?.omp?.smolModel || status?.savedConfig?.smolModel || "");
+      setSlowModel(status?.omp?.slowModel || status?.savedConfig?.slowModel || "");
+      setPlanModel(status?.omp?.planModel || status?.savedConfig?.planModel || "");
+      setSubagentModels(status?.omp?.subagentModels || status?.savedConfig?.subagentModels || {});
       if (status?.omp?.apiKey && apiKeys?.some((k) => k.key === status.omp.apiKey)) {
         setSelectedApiKey(status.omp.apiKey);
       }

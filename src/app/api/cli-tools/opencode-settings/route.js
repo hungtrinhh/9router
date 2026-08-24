@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import path from "path";
 import os from "os";
 
@@ -70,10 +71,13 @@ export async function GET() {
     const providerConfig = config?.provider?.["9router"];
     const modelMap = providerConfig?.models || {};
 
+    const savedConfig = await getCliToolConfig("opencode");
+
     return NextResponse.json({
       installed: true,
       config,
       has9Router: has9RouterConfig(config),
+      savedConfig,
       configPath: getConfigPath(),
         opencode: {
           models: Object.keys(modelMap),
@@ -160,6 +164,14 @@ export async function POST(request) {
     };
 
     await fs.writeFile(configPath, JSON.stringify(config, null, 2));
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("opencode", {
+      model: modelsArray[0],
+      models: modelsArray,
+      activeModel: typeof activeModel === "string" ? activeModel : modelsArray[0],
+      subagentModel: effectiveSubagentModel,
+    });
 
     return NextResponse.json({
       success: true,

@@ -50,16 +50,22 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
 
   // Sync models from existing config
   useEffect(() => {
-    if (status?.opencode?.models) {
+    if (status?.opencode?.models?.length) {
       setSelectedModels(status.opencode.models);
+    } else if (status?.savedConfig?.models?.length) {
+      setSelectedModels(status.savedConfig.models);
     }
     if (status?.opencode?.activeModel) {
       setActiveModel(status.opencode.activeModel);
+    } else if (status?.savedConfig?.activeModel) {
+      setActiveModel(status.savedConfig.activeModel);
     }
 
     // Parse subagent settings from agent.explorer if exists
     if (status?.config?.agent?.explorer?.model?.startsWith("9router/")) {
       setSubagentModel(status.config.agent.explorer.model.replace("9router/", ""));
+    } else if (status?.savedConfig?.subagentModel) {
+      setSubagentModel(status.savedConfig.subagentModel);
     }
   }, [status]);
 

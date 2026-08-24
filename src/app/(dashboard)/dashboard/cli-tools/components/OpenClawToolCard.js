@@ -77,13 +77,15 @@ export default function OpenClawToolCard({
   useEffect(() => {
     if (openclawStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      const provider = openclawStatus.settings?.models?.providers?.["9router"];
       if (provider) {
         const primaryModel = openclawStatus.settings?.agents?.defaults?.model?.primary;
         if (primaryModel) setSelectedModel(primaryModel.replace("9router/", ""));
+        else if (openclawStatus.savedConfig?.model) setSelectedModel(openclawStatus.savedConfig.model);
         if (provider.apiKey && apiKeys?.some(k => k.key === provider.apiKey)) {
           setSelectedApiKey(provider.apiKey);
         }
+      } else if (openclawStatus.savedConfig?.model) {
+        setSelectedModel(openclawStatus.savedConfig.model);
       }
       // Init per-agent models from enriched agents list
       const agentList = openclawStatus.agents || [];
@@ -91,6 +93,9 @@ export default function OpenClawToolCard({
       agentList.forEach((agent) => {
         if (agent.currentModel) initAgentModels[agent.id] = agent.currentModel;
       });
+      if (openclawStatus.savedConfig?.agentModels) {
+        Object.assign(initAgentModels, openclawStatus.savedConfig.agentModels);
+      }
       setAgentModels(initAgentModels);
     }
   }, [openclawStatus, apiKeys]);

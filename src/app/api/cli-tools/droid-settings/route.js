@@ -6,6 +6,7 @@ import { promisify } from "util";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 
 const execAsync = promisify(exec);
 
@@ -67,10 +68,13 @@ export async function GET() {
 
     const settings = await readSettings();
 
+    const savedConfig = await getCliToolConfig("droid");
+
     return NextResponse.json({
       installed: true,
       settings,
       has9Router: has9RouterConfig(settings),
+      savedConfig,
       settingsPath: getDroidSettingsPath(),
     });
   } catch (error) {
@@ -160,6 +164,13 @@ export async function POST(request) {
     // Write settings
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("droid", {
+      model: modelsArray[0],
+      models: modelsArray,
+      activeModel: typeof activeModel === "string" ? activeModel : modelsArray[0],
+    });
     return NextResponse.json({
       success: true,
       message: "Factory Droid settings applied successfully!",

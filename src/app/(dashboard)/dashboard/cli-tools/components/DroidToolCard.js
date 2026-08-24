@@ -88,10 +88,14 @@ export default function DroidToolCard({
       if (existingModels.length > 0) {
         setModelList(existingModels);
       } else {
-        // Legacy: single model stored as custom:9Router-0
+        // Legacy or savedConfig fallback
         const legacy = droidStatus.settings?.customModels?.find(m => m.id === "custom:9Router-0");
         if (legacy?.model) {
           setModelList([legacy.model]);
+        } else if (droidStatus.savedConfig?.models?.length) {
+          setModelList(droidStatus.savedConfig.models);
+        } else if (droidStatus.savedConfig?.model) {
+          setModelList([droidStatus.savedConfig.model]);
         }
       }
     }

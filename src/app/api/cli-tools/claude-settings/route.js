@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { DEFAULT_PLUGINS } from "@/shared/constants/coworkPlugins";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 
 const execAsync = promisify(exec);
 
@@ -104,11 +105,14 @@ export async function GET() {
     const has9Router = !!(settings?.env?.ANTHROPIC_BASE_URL);
     const claudeJson = await readClaudeJson();
 
+    const savedConfig = await getCliToolConfig("claude");
+
     return NextResponse.json({
       installed: true,
       settings: settings,
       has9Router: has9Router,
       exaMcpEnabled: !!claudeJson?.mcpServers?.exa,
+      savedConfig,
       settingsPath: getClaudeSettingsPath(),
     });
   } catch (error) {
@@ -181,6 +185,19 @@ export async function POST(request) {
     if (EXA_PLUGIN) {
       await writeClaudeJsonMcp(exaMcpEnabled ? { exa: buildExaMcpEntry() } : null);
     }
+
+    // Save model env config to database for cross-machine sync
+    const modelEnv = {};
+    for (const [k, v] of Object.entries(env)) {
+      if (k.startsWith("ANTHROPIC_") || k === "API_TIMEOUT_MS" || k === "CLAUDE_CODE_MAX_CONTEXT_TOKENS") {
+        modelEnv[k] = v;
+      }
+    }
+    await setCliToolConfig("claude", {
+      env: modelEnv,
+      exaMcpEnabled: !!exaMcpEnabled,
+      maxContextTokens: maxContextTokens || null,
+    });
 
     return NextResponse.json({
       success: true,

@@ -6,6 +6,7 @@ import path from "path";
 import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import { parseYAML, stringifyYAML } from "confbox";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
 
@@ -143,6 +144,8 @@ export async function GET() {
       }
     }
 
+    const savedConfig = await getCliToolConfig("omp");
+
     return NextResponse.json({
       installed: true,
       settings: {
@@ -151,6 +154,7 @@ export async function GET() {
         provider: providerConfig || null,
       },
       has9Router: has9RouterConfig(modelsData),
+      savedConfig,
       configPath: getConfigPath(),
       modelsPath: getModelsPath(),
       omp: {
@@ -294,6 +298,17 @@ export async function POST(request) {
     }
 
     await fs.writeFile(getConfigPath(), stringifyYAML(configData), "utf-8");
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("omp", {
+      model: primaryModel,
+      models: modelsArray,
+      activeModel: primaryModel,
+      smolModel,
+      slowModel,
+      planModel,
+      subagentModels,
+    });
 
     return NextResponse.json({
       success: true,

@@ -78,6 +78,8 @@ export default function CoworkToolCard({
   useEffect(() => {
     if (status?.cowork?.models?.length) {
       setSelectedModels(status.cowork.models);
+    } else if (status?.savedConfig?.models?.length) {
+      setSelectedModels(status.savedConfig.models);
     }
     if (status?.cowork?.baseUrl && !customBaseUrl) {
       setCustomBaseUrl(stripV1(status.cowork.baseUrl));

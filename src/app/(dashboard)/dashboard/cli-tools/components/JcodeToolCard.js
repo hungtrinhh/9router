@@ -76,11 +76,12 @@ export default function JcodeToolCard({
   useEffect(() => {
     if (jcodeStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      const provider = jcodeStatus.config?.providers?.["9router"];
+      if (provider?.default_model) {
+        setSelectedModel(provider.default_model);
+      } else if (jcodeStatus.savedConfig?.default_model || jcodeStatus.savedConfig?.models?.[0]) {
+        setSelectedModel(jcodeStatus.savedConfig.default_model || jcodeStatus.savedConfig.models[0]);
+      }
       if (provider) {
-        if (provider.default_model) {
-          setSelectedModel(provider.default_model);
-        }
         // Try to match API key from env file
         const envApiKey = jcodeStatus.envApiKey;
         if (envApiKey && apiKeys?.some(k => k.key === envApiKey)) {

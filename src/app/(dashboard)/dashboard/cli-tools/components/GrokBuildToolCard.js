@@ -76,10 +76,10 @@ export default function GrokBuildToolCard({
 }) {
   const { getCaps } = useModelCaps();
   const getContextWindow = (model) => getCaps(model)?.contextWindow || null;
-  const initialModel = initialStatus?.settings?.model?.model || "";
+  const initialModel = initialStatus?.settings?.model?.model || initialStatus?.savedConfig?.model || "";
   const initialSubagents = Object.fromEntries(
     SUBAGENT_TYPES
-      .map((type) => [type.id, initialStatus?.settings?.subagentModels?.[type.id]?.model])
+      .map((type) => [type.id, initialStatus?.settings?.subagentModels?.[type.id]?.model || initialStatus?.savedConfig?.subagentModels?.[type.id]?.model || initialStatus?.savedConfig?.subagentModels?.[type.id]])
       .filter(([, model]) => Boolean(model)),
   );
   const [grokStatus, setGrokStatus] = useState(initialStatus || null);
@@ -106,10 +106,10 @@ export default function GrokBuildToolCard({
         : "other";
 
   const hydrateForm = useCallback((status) => {
-    const mainModel = status?.settings?.model?.model || "";
+    const mainModel = status?.settings?.model?.model || status?.savedConfig?.model || "";
     const configuredSubagents = Object.fromEntries(
       SUBAGENT_TYPES
-        .map((type) => [type.id, status?.settings?.subagentModels?.[type.id]?.model])
+        .map((type) => [type.id, status?.settings?.subagentModels?.[type.id]?.model || status?.savedConfig?.subagentModels?.[type.id]?.model || status?.savedConfig?.subagentModels?.[type.id]])
         .filter(([, model]) => Boolean(model)),
     );
     setSelectedModel(mainModel);

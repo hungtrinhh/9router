@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import path from "path";
 import os from "os";
 
@@ -59,6 +60,7 @@ export async function GET() {
       return NextResponse.json({ installed: false, settings: null, message: "Cline CLI is not installed" });
     }
     const globalState = await readJson(getGlobalStatePath());
+    const savedConfig = await getCliToolConfig("cline");
     return NextResponse.json({
       installed: true,
       settings: {
@@ -68,6 +70,7 @@ export async function GET() {
         openAiModelId: globalState?.openAiModelId,
       },
       has9Router: has9RouterConfig(globalState),
+      savedConfig,
       globalStatePath: getGlobalStatePath(),
     });
   } catch (error) {
@@ -100,6 +103,9 @@ export async function POST(request) {
     secrets.openAiApiKey = apiKey;
     await fs.writeFile(getSecretsPath(), JSON.stringify(secrets, null, 2));
 
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("cline", { model });
     return NextResponse.json({ success: true, message: "Cline settings applied successfully!", globalStatePath: getGlobalStatePath() });
   } catch (error) {
     console.log("Error updating cline settings:", error);

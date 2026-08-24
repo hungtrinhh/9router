@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import path from "path";
 import os from "os";
 
@@ -101,11 +102,14 @@ export async function GET() {
       })
     );
 
+    const savedConfig = await getCliToolConfig("openclaw");
+
     return NextResponse.json({
       installed: true,
       settings,
       agents: enrichedAgents,
       has9Router: has9RouterConfig(settings),
+      savedConfig,
       settingsPath: getOpenClawSettingsPath(),
     });
   } catch (error) {
@@ -222,6 +226,9 @@ export async function POST(request) {
     }
 
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("openclaw", { model, agentModels });
 
     return NextResponse.json({
       success: true,

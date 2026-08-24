@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import os from "os";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { parseTOML, stringifyTOML } from "confbox";
@@ -119,11 +120,13 @@ export async function GET() {
 
   const config = await readConfig();
   const has9Router = has9RouterConfig(config);
+  const savedConfig = await getCliToolConfig("jcode");
 
   return NextResponse.json({
     installed: true,
     config,
     has9Router,
+    savedConfig,
     configPath: getConfigPath(),
   });
 }
@@ -169,6 +172,9 @@ export async function POST(request) {
     await fs.mkdir(jcodeConfigDir, { recursive: true });
 
     const env = await readProviderEnv();
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("jcode", { models, default_model: models && models.length > 0 ? models[0] : "cc/claude-opus-4-7" });
     env.JCODE_9ROUTER_API_KEY = apiKey;
     await writeProviderEnv(env);
 

@@ -37,7 +37,11 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
   }, [isExpanded]);
 
   useEffect(() => {
-    if (status?.settings?.openAiModelId) setSelectedModel(status.settings.openAiModelId);
+    if (status?.settings?.openAiModelId) {
+      setSelectedModel(status.settings.openAiModelId);
+    } else if (status?.savedConfig?.model) {
+      setSelectedModel(status.savedConfig.model);
+    }
   }, [status]);
 
   const fetchModelAliases = async () => {

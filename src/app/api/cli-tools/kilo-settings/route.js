@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 import path from "path";
 import os from "os";
 
@@ -59,10 +60,12 @@ export async function GET() {
       return NextResponse.json({ installed: false, settings: null, message: "Kilo Code CLI is not installed" });
     }
     const auth = await readJson(getAuthPath());
+    const savedConfig = await getCliToolConfig("kilo");
     return NextResponse.json({
       installed: true,
       settings: { auth: auth ? Object.keys(auth) : [] },
       has9Router: has9RouterConfig(auth),
+      savedConfig,
       authPath: getAuthPath(),
     });
   } catch (error) {
@@ -90,6 +93,8 @@ export async function POST(request) {
       model,
     };
     await fs.writeFile(getAuthPath(), JSON.stringify(auth, null, 2));
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("kilo", { model });
 
     // Best-effort: update VS Code extension settings
     try {
@@ -98,7 +103,6 @@ export async function POST(request) {
       vscode["kilocode.defaultModel"] = model;
       await fs.writeFile(getVscodeSettingsPath(), JSON.stringify(vscode, null, 2));
     } catch { /* VS Code settings not writable */ }
-
     return NextResponse.json({ success: true, message: "Kilo Code settings applied successfully!", authPath: getAuthPath() });
   } catch (error) {
     console.log("Error updating kilo settings:", error);

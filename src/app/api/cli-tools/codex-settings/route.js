@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
+import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
 
 const execAsync = promisify(exec);
 
@@ -94,10 +95,13 @@ export async function GET() {
 
     const config = await readConfig();
 
+    const savedConfig = await getCliToolConfig("codex");
+
     return NextResponse.json({
       installed: true,
       config,
       has9Router: has9RouterConfig(config),
+      savedConfig,
       configPath: getCodexConfigPath(),
     });
   } catch (error) {
@@ -164,6 +168,12 @@ export async function POST(request) {
     authData.auth_mode = "apikey";
     await fs.writeFile(authPath, JSON.stringify(authData, null, 2));
 
+
+    // Save model settings to database for cross-machine sync
+    await setCliToolConfig("codex", {
+      model,
+      subagentModel: effectiveSubagentModel,
+    });
     return NextResponse.json({
       success: true,
       message: "Codex settings applied successfully!",
