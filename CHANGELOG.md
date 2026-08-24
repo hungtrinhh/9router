@@ -1,3 +1,8 @@
+# v0.5.65 (2026-08-24)
+
+## Features
+- **CLI Tools**: automatically save configurations when selecting models, modifying inputs, clearing fields, or changing endpoints/API keys in the dashboard
+
 # v0.5.64 (2026-08-24)
 
 ## Features

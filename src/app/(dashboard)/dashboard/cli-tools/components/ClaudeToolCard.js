@@ -162,14 +162,25 @@ export default function ClaudeToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const handleApplySettings = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApplySettings = async (overrides = {}) => {
+    if (!canManageLocalSettings) return;
     setApplying(true);
     setMessage(null);
     try {
-      const env = { ANTHROPIC_BASE_URL: getEffectiveBaseUrl() };
+      const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+      const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+      const currentModelMappings = "modelMappings" in overrides ? overrides.modelMappings : modelMappings;
+      const currentMaxContextTokens = "maxContextTokens" in overrides ? overrides.maxContextTokens : maxContextTokens;
+      const currentExaMcpEnabled = "exaMcpEnabled" in overrides ? overrides.exaMcpEnabled : exaMcpEnabled;
+
+      const url = currentCustomBaseUrl || baseUrl;
+      const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
+      const env = { ANTHROPIC_BASE_URL: effectiveBaseUrl };
 
       // Get key from dropdown, fallback to first key or sk_9router for localhost
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
 
@@ -178,21 +189,21 @@ export default function ClaudeToolCard({
       }
 
       tool.defaultModels.forEach((model) => {
-        const targetModel = modelMappings[model.alias];
+        const targetModel = currentModelMappings[model.alias];
         if (targetModel && model.envKey) env[model.envKey] = targetModel;
       });
-      if (maxContextTokens) {
-        env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = maxContextTokens;
+      if (currentMaxContextTokens) {
+        env.CLAUDE_CODE_MAX_CONTEXT_TOKENS = currentMaxContextTokens;
       }
       const res = await fetch("/api/cli-tools/claude-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ env, exaMcpEnabled, maxContextTokens }),
+        body: JSON.stringify({ env, exaMcpEnabled: currentExaMcpEnabled, maxContextTokens: currentMaxContextTokens }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Settings applied successfully!" });
-        setClaudeStatus(prev => ({ ...prev, hasBackup: true, settings: { ...prev?.settings, env }, exaMcpEnabled }));
+        setMessage({ type: "success", text: "Settings saved successfully!" });
+        setClaudeStatus(prev => ({ ...prev, hasBackup: true, settings: { ...prev?.settings, env }, exaMcpEnabled: currentExaMcpEnabled }));
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
       }
@@ -201,6 +212,13 @@ export default function ClaudeToolCard({
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApplySettings(overrides);
+    }, 600);
   };
 
   const handleResetSettings = async () => {
@@ -231,7 +249,11 @@ export default function ClaudeToolCard({
   };
 
   const handleModelSelect = (model) => {
-    if (currentEditingAlias) onModelMappingChange(currentEditingAlias, model.value);
+    if (currentEditingAlias) {
+      onModelMappingChange(currentEditingAlias, model.value);
+      const nextMappings = { ...modelMappings, [currentEditingAlias]: model.value };
+      handleApplySettings({ modelMappings: nextMappings });
+    }
   };
 
   // Generate settings.json content for manual copy
@@ -331,7 +353,10 @@ export default function ClaudeToolCard({
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <BaseUrlSelect
                     value={customBaseUrl || getDisplayUrl()}
-                    onChange={setCustomBaseUrl}
+                    onChange={(url) => {
+                      setCustomBaseUrl(url);
+                      handleApplySettings({ customBaseUrl: url });
+                    }}
                     requiresExternalUrl={tool.requiresExternalUrl}
                     tunnelEnabled={tunnelEnabled}
                     tunnelPublicUrl={tunnelPublicUrl}
@@ -355,7 +380,15 @@ export default function ClaudeToolCard({
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">API Key</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <ApiKeySelect value={selectedApiKey} onChange={setSelectedApiKey} apiKeys={apiKeys} cloudEnabled={cloudEnabled} />
+                  <ApiKeySelect
+                    value={selectedApiKey}
+                    onChange={(key) => {
+                      setSelectedApiKey(key);
+                      handleApplySettings({ selectedApiKey: key });
+                    }}
+                    apiKeys={apiKeys}
+                    cloudEnabled={cloudEnabled}
+                  />
                 </div>
 
                 {/* Model Mappings */}
@@ -364,8 +397,28 @@ export default function ClaudeToolCard({
                     <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">{model.name}</span>
                     <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                     <div className="relative w-full min-w-0">
-                      <input type="text" value={modelMappings[model.alias] || ""} onChange={(e) => onModelMappingChange(model.alias, e.target.value)} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                      {modelMappings[model.alias] && <button onClick={() => onModelMappingChange(model.alias, "")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                      <input
+                        type="text"
+                        value={modelMappings[model.alias] || ""}
+                        onChange={(e) => {
+                          onModelMappingChange(model.alias, e.target.value);
+                          debouncedSave({ modelMappings: { ...modelMappings, [model.alias]: e.target.value } });
+                        }}
+                        placeholder="provider/model-id"
+                        className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                      />
+                      {modelMappings[model.alias] && (
+                        <button
+                          onClick={() => {
+                            onModelMappingChange(model.alias, "");
+                            handleApplySettings({ modelMappings: { ...modelMappings, [model.alias]: "" } });
+                          }}
+                          className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
+                          title="Clear"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">close</span>
+                        </button>
+                      )}
                     </div>
                     <button onClick={() => openModelSelector(model.alias)} disabled={!hasActiveProviders} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${hasActiveProviders ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select Model</button>
                   </div>

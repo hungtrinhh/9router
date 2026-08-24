@@ -114,26 +114,38 @@ export default function DeepSeekTuiToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const handleApply = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApply = async (overrides = {}) => {
+    if (!canManageLocalSettings) return;
+    const currentModel = "model" in overrides ? overrides.model : selectedModel;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    if (!currentModel?.trim()) return;
+
     setApplying(true);
     setMessage(null);
     try {
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
+
+      const url = currentCustomBaseUrl || getLocalBaseUrl();
+      const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
 
       const res = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
-          model: selectedModel,
+          model: currentModel,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Settings applied successfully!" });
+        setMessage({ type: "success", text: "Settings saved successfully!" });
         checkStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
@@ -143,6 +155,13 @@ export default function DeepSeekTuiToolCard({
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApply(overrides);
+    }, 600);
   };
 
   const handleReset = async () => {
@@ -168,6 +187,7 @@ export default function DeepSeekTuiToolCard({
   const handleModelSelect = (model) => {
     setSelectedModel(model.value);
     setModalOpen(false);
+    handleApply({ model: model.value });
   };
 
   const getManualConfigs = () => {
@@ -262,7 +282,10 @@ model = "${selectedModel || "provider/model-id"}"
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <BaseUrlSelect
                     value={customBaseUrl || getEffectiveBaseUrl()}
-                    onChange={setCustomBaseUrl}
+                    onChange={(url) => {
+                      setCustomBaseUrl(url);
+                      handleApply({ customBaseUrl: url });
+                    }}
                     requiresExternalUrl={tool.requiresExternalUrl}
                     tunnelEnabled={tunnelEnabled}
                     tunnelPublicUrl={tunnelPublicUrl}
@@ -284,15 +307,43 @@ model = "${selectedModel || "provider/model-id"}"
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">API Key</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <ApiKeySelect value={selectedApiKey} onChange={setSelectedApiKey} apiKeys={apiKeys} cloudEnabled={cloudEnabled} />
+                  <ApiKeySelect
+                    value={selectedApiKey}
+                    onChange={(key) => {
+                      setSelectedApiKey(key);
+                      handleApply({ selectedApiKey: key });
+                    }}
+                    apiKeys={apiKeys}
+                    cloudEnabled={cloudEnabled}
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Default Model</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <div className="relative w-full min-w-0">
-                    <input type="text" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                    {selectedModel && <button onClick={() => setSelectedModel("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                    <input
+                      type="text"
+                      value={selectedModel}
+                      onChange={(e) => {
+                        setSelectedModel(e.target.value);
+                        debouncedSave({ model: e.target.value });
+                      }}
+                      placeholder="provider/model-id"
+                      className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                    />
+                    {selectedModel && (
+                      <button
+                        onClick={() => {
+                          setSelectedModel("");
+                          handleApply({ model: "" });
+                        }}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
+                        title="Clear"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">close</span>
+                      </button>
+                    )}
                   </div>
                   <button onClick={() => setModalOpen(true)} disabled={!hasActiveProviders} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${hasActiveProviders ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select</button>
                 </div>

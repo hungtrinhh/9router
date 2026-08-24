@@ -97,28 +97,40 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   };
 
-  const handleApplySettings = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApplySettings = async (overrides = {}) => {
+    if (!canManageLocalSettings) return;
+    const currentModel = "model" in overrides ? overrides.model : selectedModel;
+    const currentSubagent = "subagentModel" in overrides ? overrides.subagentModel : subagentModel;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    if (!currentModel?.trim()) return;
+
     setApplying(true);
     setMessage(null);
     try {
-      // Use sk_9router for localhost if no key, otherwise use selected key
-      const keyToUse = (selectedApiKey && selectedApiKey.trim())
-        ? selectedApiKey
-        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
+      const keyToUse = (currentApiKey && currentApiKey.trim())
+        ? currentApiKey
+        : (!cloudEnabled ? "sk_9router" : currentApiKey);
+
+      const url = currentCustomBaseUrl || baseUrl;
+      const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
 
       const res = await fetch("/api/cli-tools/codex-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
-          model: selectedModel,
-          subagentModel: subagentModel || selectedModel
+          model: currentModel,
+          subagentModel: currentSubagent || currentModel,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Settings applied successfully!" });
+        setMessage({ type: "success", text: "Settings saved successfully!" });
         checkCodexStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
@@ -128,6 +140,13 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApplySettings(overrides);
+    }, 600);
   };
 
   const handleResetSettings = async () => {
@@ -152,12 +171,20 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
   };
 
   const handleModelSelect = (model) => {
-    setSelectedModel(model.value);
-    // Auto-set subagent model if not set
+    const nextModel = model.value;
+    setSelectedModel(nextModel);
+    const nextSubagent = subagentModel || nextModel;
     if (!subagentModel) {
-      setSubagentModel(model.value);
+      setSubagentModel(nextModel);
     }
     setModalOpen(false);
+    handleApplySettings({ model: nextModel, subagentModel: nextSubagent });
+  };
+
+  const handleSubagentModelSelect = (model) => {
+    setSubagentModel(model.value);
+    setSubagentModalOpen(false);
+    handleApplySettings({ subagentModel: model.value });
   };
 
   const getManualConfigs = () => {
@@ -278,7 +305,10 @@ model = "${effectiveSubagentModel}"
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <BaseUrlSelect
                     value={customBaseUrl || getDisplayUrl()}
-                    onChange={setCustomBaseUrl}
+                    onChange={(url) => {
+                      setCustomBaseUrl(url);
+                      handleApplySettings({ customBaseUrl: url });
+                    }}
                     requiresExternalUrl={tool.requiresExternalUrl}
                     tunnelEnabled={tunnelEnabled}
                     tunnelPublicUrl={tunnelPublicUrl}
@@ -306,7 +336,15 @@ model = "${effectiveSubagentModel}"
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr_auto] sm:items-center sm:gap-2">
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">API Key</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <ApiKeySelect value={selectedApiKey} onChange={setSelectedApiKey} apiKeys={apiKeys} cloudEnabled={cloudEnabled} />
+                  <ApiKeySelect
+                    value={selectedApiKey}
+                    onChange={(key) => {
+                      setSelectedApiKey(key);
+                      handleApplySettings({ selectedApiKey: key });
+                    }}
+                    apiKeys={apiKeys}
+                    cloudEnabled={cloudEnabled}
+                  />
                 </div>
 
                 {/* Model */}
@@ -314,8 +352,28 @@ model = "${effectiveSubagentModel}"
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Model</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <div className="relative w-full min-w-0">
-                    <input type="text" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                    {selectedModel && <button onClick={() => setSelectedModel("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                    <input
+                      type="text"
+                      value={selectedModel}
+                      onChange={(e) => {
+                        setSelectedModel(e.target.value);
+                        debouncedSave({ model: e.target.value });
+                      }}
+                      placeholder="provider/model-id"
+                      className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
+                    />
+                    {selectedModel && (
+                      <button
+                        onClick={() => {
+                          setSelectedModel("");
+                          handleApplySettings({ model: "" });
+                        }}
+                        className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
+                        title="Clear"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">close</span>
+                      </button>
+                    )}
                   </div>
                   <button onClick={() => setModalOpen(true)} disabled={!activeProviders?.length} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${activeProviders?.length ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select Model</button>
                 </div>
@@ -328,13 +386,19 @@ model = "${effectiveSubagentModel}"
                     <input
                       type="text"
                       value={subagentModel}
-                      onChange={(e) => setSubagentModel(e.target.value)}
+                      onChange={(e) => {
+                        setSubagentModel(e.target.value);
+                        debouncedSave({ subagentModel: e.target.value });
+                      }}
                       placeholder={selectedModel || "provider/model-id (defaults to main model)"}
                       className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
                     />
                     {subagentModel && (
                       <button
-                        onClick={() => setSubagentModel("")}
+                        onClick={() => {
+                          setSubagentModel("");
+                          handleApplySettings({ subagentModel: "" });
+                        }}
                         className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors"
                         title="Clear (will use main model)"
                       >
@@ -390,10 +454,7 @@ model = "${effectiveSubagentModel}"
 
       {subagentModalOpen && (
         <ModelSelectModal
-          isOpen={subagentModalOpen}
-          onClose={() => setSubagentModalOpen(false)}
-          onSelect={(model) => { setSubagentModel(model.value); setSubagentModalOpen(false); }}
-          selectedModel={subagentModel}
+          onSelect={handleSubagentModelSelect}
           activeProviders={activeProviders}
           modelAliases={modelAliases}
           title="Select Subagent Model for Codex"

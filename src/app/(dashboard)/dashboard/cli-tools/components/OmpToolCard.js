@@ -213,58 +213,84 @@ export default function OmpToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const handleApplySettings = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApplySettings = async (overrides = {}) => {
+    if (!canManageLocalSettings) return;
+
+    const currentSelectedModel = "selectedModel" in overrides ? overrides.selectedModel : selectedModel;
+    const currentSmolModel = "smolModel" in overrides ? overrides.smolModel : smolModel;
+    const currentSlowModel = "slowModel" in overrides ? overrides.slowModel : slowModel;
+    const currentPlanModel = "planModel" in overrides ? overrides.planModel : planModel;
+    const currentSubagentModels = "subagentModels" in overrides ? overrides.subagentModels : subagentModels;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    if (!currentSelectedModel?.trim()) {
+      return;
+    }
+
     setApplying(true);
     setMessage(null);
     try {
       const keyToUse =
-        selectedApiKey?.trim() ||
+        currentApiKey?.trim() ||
         (apiKeys?.length > 0 ? apiKeys[0].key : null) ||
         (!cloudEnabled ? "sk_9router" : null);
 
       const mappedSubagents = {};
       for (const type of OMP_SUBAGENT_TYPES) {
-        const m = subagentModels[type.id]?.trim();
+        const m = currentSubagentModels[type.id]?.trim();
         if (m) mappedSubagents[type.id] = m;
       }
 
       // Collect all distinct models selected across roles & subagents
       const allModels = Array.from(
         new Set([
-          selectedModel,
-          smolModel,
-          slowModel,
-          planModel,
+          currentSelectedModel,
+          currentSmolModel,
+          currentSlowModel,
+          currentPlanModel,
           ...Object.values(mappedSubagents),
         ].filter(Boolean))
       );
+
+      const url = currentCustomBaseUrl || getLocalBaseUrl();
+      const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
 
       const res = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
           models: allModels,
-          activeModel: selectedModel,
-          smolModel: smolModel || undefined,
-          slowModel: slowModel || undefined,
-          planModel: planModel || undefined,
+          activeModel: currentSelectedModel,
+          smolModel: currentSmolModel || undefined,
+          slowModel: currentSlowModel || undefined,
+          planModel: currentPlanModel || undefined,
           subagentModels: mappedSubagents,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Settings applied successfully!" });
+        setMessage({ type: "success", text: "Settings saved successfully!" });
         checkOmpStatus();
       } else {
-        setMessage({ type: "error", text: data.error || "Failed to apply settings" });
+        setMessage({ type: "error", text: data.error || "Failed to save settings" });
       }
     } catch (error) {
       setMessage({ type: "error", text: error.message });
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApplySettings(overrides);
+    }, 600);
   };
 
   const handleResetSettings = async () => {
@@ -294,18 +320,26 @@ export default function OmpToolCard({
 
   const handleModelSelect = (model) => {
     const val = model.value;
+    let nextOverrides = {};
     if (modalTarget === "default") {
       setSelectedModel(val);
+      nextOverrides = { selectedModel: val };
     } else if (modalTarget === "smol") {
       setSmolModel(val);
+      nextOverrides = { smolModel: val };
     } else if (modalTarget === "slow") {
       setSlowModel(val);
+      nextOverrides = { slowModel: val };
     } else if (modalTarget === "plan") {
       setPlanModel(val);
+      nextOverrides = { planModel: val };
     } else if (modalTarget) {
-      setSubagentModels((prev) => ({ ...prev, [modalTarget]: val }));
+      const nextSubs = { ...subagentModels, [modalTarget]: val };
+      setSubagentModels(nextSubs);
+      nextOverrides = { subagentModels: nextSubs };
     }
     setModalTarget(null);
+    handleApplySettings(nextOverrides);
   };
 
   const getTargetTitle = () => {
@@ -537,7 +571,10 @@ ${modelEntries}`;
                   </span>
                   <BaseUrlSelect
                     value={customBaseUrl || getDisplayUrl()}
-                    onChange={setCustomBaseUrl}
+                    onChange={(url) => {
+                      setCustomBaseUrl(url);
+                      handleApplySettings({ customBaseUrl: url });
+                    }}
                     requiresExternalUrl={tool.requiresExternalUrl}
                     tunnelEnabled={tunnelEnabled}
                     tunnelPublicUrl={tunnelPublicUrl}
@@ -571,7 +608,10 @@ ${modelEntries}`;
                   </span>
                   <ApiKeySelect
                     value={selectedApiKey}
-                    onChange={setSelectedApiKey}
+                    onChange={(key) => {
+                      setSelectedApiKey(key);
+                      handleApplySettings({ selectedApiKey: key });
+                    }}
                     apiKeys={apiKeys}
                     cloudEnabled={cloudEnabled}
                   />
@@ -582,9 +622,15 @@ ${modelEntries}`;
                   label="Primary Model"
                   value={selectedModel}
                   placeholder="claude-sonnet-4-6"
-                  onChange={setSelectedModel}
+                  onChange={(val) => {
+                    setSelectedModel(val);
+                    debouncedSave({ selectedModel: val });
+                  }}
                   onSelect={() => setModalTarget("default")}
-                  onClear={() => setSelectedModel("")}
+                  onClear={() => {
+                    setSelectedModel("");
+                    handleApplySettings({ selectedModel: "" });
+                  }}
                   disabled={!hasActiveProviders}
                   help="Default model role used for main conversation and coding"
                 />
@@ -594,9 +640,15 @@ ${modelEntries}`;
                   label="Smol Model"
                   value={smolModel}
                   placeholder="claude-haiku-4-5 (optional)"
-                  onChange={setSmolModel}
+                  onChange={(val) => {
+                    setSmolModel(val);
+                    debouncedSave({ smolModel: val });
+                  }}
                   onSelect={() => setModalTarget("smol")}
-                  onClear={() => setSmolModel("")}
+                  onClear={() => {
+                    setSmolModel("");
+                    handleApplySettings({ smolModel: "" });
+                  }}
                   disabled={!hasActiveProviders}
                   help="Fast model for lightweight tasks, prewalk handoff, and summaries"
                 />
@@ -606,9 +658,15 @@ ${modelEntries}`;
                   label="Slow Model"
                   value={slowModel}
                   placeholder="claude-opus-4-6 (optional)"
-                  onChange={setSlowModel}
+                  onChange={(val) => {
+                    setSlowModel(val);
+                    debouncedSave({ slowModel: val });
+                  }}
                   onSelect={() => setModalTarget("slow")}
-                  onClear={() => setSlowModel("")}
+                  onClear={() => {
+                    setSlowModel("");
+                    handleApplySettings({ slowModel: "" });
+                  }}
                   disabled={!hasActiveProviders}
                   help="Deep reasoning model for complex architectural & bug analysis"
                 />
@@ -618,9 +676,15 @@ ${modelEntries}`;
                   label="Plan Model"
                   value={planModel}
                   placeholder="claude-opus-4-6 (optional)"
-                  onChange={setPlanModel}
+                  onChange={(val) => {
+                    setPlanModel(val);
+                    debouncedSave({ planModel: val });
+                  }}
                   onSelect={() => setModalTarget("plan")}
-                  onClear={() => setPlanModel("")}
+                  onClear={() => {
+                    setPlanModel("");
+                    handleApplySettings({ planModel: "" });
+                  }}
                   disabled={!hasActiveProviders}
                   help="Planning model for plan mode and task decomposition"
                 />
@@ -648,14 +712,18 @@ ${modelEntries}`;
                     label={type.label}
                     help={type.help}
                     value={subagentModels[type.id] || ""}
-                    onChange={(val) =>
-                      setSubagentModels((prev) => ({ ...prev, [type.id]: val }))
-                    }
+                    onChange={(val) => {
+                      const nextSubs = { ...subagentModels, [type.id]: val };
+                      setSubagentModels(nextSubs);
+                      debouncedSave({ subagentModels: nextSubs });
+                    }}
                     placeholder={`${selectedModel || "Primary Model"} (inherit)`}
                     onSelect={() => setModalTarget(type.id)}
-                    onClear={() =>
-                      setSubagentModels((prev) => ({ ...prev, [type.id]: "" }))
-                    }
+                    onClear={() => {
+                      const nextSubs = { ...subagentModels, [type.id]: "" };
+                      setSubagentModels(nextSubs);
+                      handleApplySettings({ subagentModels: nextSubs });
+                    }}
                     disabled={!hasActiveProviders}
                   />
                 ))}

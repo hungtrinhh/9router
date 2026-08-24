@@ -159,33 +159,48 @@ export default function GrokBuildToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const handleApply = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApply = async (overrides = {}) => {
+    if (!canManageLocalSettings) return;
+    const currentModel = "model" in overrides ? overrides.model : selectedModel;
+    const currentSubagentModels = "subagentModels" in overrides ? overrides.subagentModels : subagentModels;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    if (!currentModel?.trim()) return;
+
     setApplying(true);
     setMessage(null);
     try {
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
       const mappedSubagents = {};
       for (const type of SUBAGENT_TYPES) {
-        const model = subagentModels[type.id]?.trim();
+        const model = currentSubagentModels[type.id]?.trim();
         if (model) mappedSubagents[type.id] = { model, contextWindow: getContextWindow(model) };
       }
+
+      const url = currentCustomBaseUrl || (typeof window !== "undefined"
+        ? window.location.origin.replace("://localhost", "://127.0.0.1")
+        : "http://127.0.0.1:20128");
+      const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
 
       const res = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
-          model: selectedModel,
-          contextWindow: getContextWindow(selectedModel),
+          model: currentModel,
+          contextWindow: getContextWindow(currentModel),
           subagentModels: mappedSubagents,
         }),
       });
       const data = await res.json();
       if (res.ok) {
-        setMessage({ type: "success", text: "Main and subagent models applied successfully!" });
+        setMessage({ type: "success", text: "Settings saved successfully!" });
         checkStatus();
       } else {
         setMessage({ type: "error", text: data.error || "Failed to apply settings" });
@@ -195,6 +210,13 @@ export default function GrokBuildToolCard({
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApply(overrides);
+    }, 600);
   };
 
   const handleReset = async () => {
@@ -219,12 +241,17 @@ export default function GrokBuildToolCard({
   };
 
   const handleModelSelect = (model) => {
+    let nextOverrides = {};
     if (modelTarget === "main") {
       setSelectedModel(model.value);
+      nextOverrides = { model: model.value };
     } else if (modelTarget) {
-      setSubagentModels((current) => ({ ...current, [modelTarget]: model.value }));
+      const nextSubs = { ...subagentModels, [modelTarget]: model.value };
+      setSubagentModels(nextSubs);
+      nextOverrides = { subagentModels: nextSubs };
     }
     setModelTarget(null);
+    handleApply(nextOverrides);
   };
 
   const getManualConfigs = () => {
@@ -311,7 +338,18 @@ export default function GrokBuildToolCard({
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Select Endpoint</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <BaseUrlSelect value={customBaseUrl || getEffectiveBaseUrl()} onChange={setCustomBaseUrl} requiresExternalUrl={tool.requiresExternalUrl} tunnelEnabled={tunnelEnabled} tunnelPublicUrl={tunnelPublicUrl} tailscaleEnabled={tailscaleEnabled} tailscaleUrl={tailscaleUrl} />
+                  <BaseUrlSelect
+                    value={customBaseUrl || getEffectiveBaseUrl()}
+                    onChange={(url) => {
+                      setCustomBaseUrl(url);
+                      handleApply({ customBaseUrl: url });
+                    }}
+                    requiresExternalUrl={tool.requiresExternalUrl}
+                    tunnelEnabled={tunnelEnabled}
+                    tunnelPublicUrl={tunnelPublicUrl}
+                    tailscaleEnabled={tailscaleEnabled}
+                    tailscaleUrl={tailscaleUrl}
+                  />
                 </div>
 
                 {configuredModel?.base_url && (
@@ -325,10 +363,28 @@ export default function GrokBuildToolCard({
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">API Key</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
-                  <ApiKeySelect value={selectedApiKey} onChange={setSelectedApiKey} apiKeys={apiKeys} cloudEnabled={cloudEnabled} />
+                  <ApiKeySelect
+                    value={selectedApiKey}
+                    onChange={(key) => {
+                      setSelectedApiKey(key);
+                      handleApply({ selectedApiKey: key });
+                    }}
+                    apiKeys={apiKeys}
+                    cloudEnabled={cloudEnabled}
+                  />
                 </div>
 
-                <ModelField label="Main Model" value={selectedModel} onChange={setSelectedModel} placeholder="provider/model-id" onSelect={() => setModelTarget("main")} disabled={!hasActiveProviders} />
+                <ModelField
+                  label="Main Model"
+                  value={selectedModel}
+                  onChange={(val) => {
+                    setSelectedModel(val);
+                    debouncedSave({ model: val });
+                  }}
+                  placeholder="provider/model-id"
+                  onSelect={() => setModelTarget("main")}
+                  disabled={!hasActiveProviders}
+                />
 
                 <div className="my-1 border-t border-border pt-3">
                   <div className="mb-2 flex items-start gap-2">
@@ -346,7 +402,11 @@ export default function GrokBuildToolCard({
                     label={type.label}
                     help={type.help}
                     value={subagentModels[type.id] || ""}
-                    onChange={(value) => setSubagentModels((current) => ({ ...current, [type.id]: value }))}
+                    onChange={(value) => {
+                      const nextSubs = { ...subagentModels, [type.id]: value };
+                      setSubagentModels(nextSubs);
+                      debouncedSave({ subagentModels: nextSubs });
+                    }}
                     placeholder={`${selectedModel || "Main Model"} (inherit)`}
                     onSelect={() => setModelTarget(type.id)}
                     disabled={!hasActiveProviders}
