@@ -264,28 +264,52 @@ elif tool == "omp":
         if saved:
             backups.append(saved)
     model_id = model if model else "claude-sonnet-4-6"
-    models_yaml = (
-        "providers:\n"
+    escaped_model = model_id.replace("\\", "\\\\").replace('"', '\\"')
+    escaped_url = base_url.replace("\\", "\\\\").replace('"', '\\"')
+    escaped_key = api_key.replace("\\", "\\\\").replace('"', '\\"')
+
+    nine_router_block = (
         "  9router:\n"
-        f'    baseUrl: "{base_url}"\n'
-        f'    apiKey: "{api_key}"\n'
+        f'    baseUrl: "{escaped_url}"\n'
+        f'    apiKey: "{escaped_key}"\n'
         '    api: "openai-completions"\n'
         "    models:\n"
-        f'      - id: "{model_id}"\n'
-        f'        name: "{model_id}"\n'
+        f'      - id: "{escaped_model}"\n'
+        f'        name: "{escaped_model}"\n'
         "        contextWindow: 200000\n"
         "        maxTokens: 8192\n"
         "        reasoning: true\n"
-        '        input: ["text", "image"]\n'
+        '        input: ["text", "image"]'
     )
-    config_yaml = (
+    roles_block = (
         "modelRoles:\n"
-        f'  default: "9router/{model_id}"\n'
-        f'  smol: "9router/{model_id}"\n'
-        f'  slow: "9router/{model_id}"\n'
+        f'  default: "9router/{escaped_model}"\n'
+        f'  smol: "9router/{escaped_model}"\n'
+        f'  slow: "9router/{escaped_model}"'
     )
-    models_path.write_text(models_yaml, encoding="utf-8")
-    config_path.write_text(config_yaml, encoding="utf-8")
+
+    models_content = models_path.read_text(encoding="utf-8") if models_path.exists() else ""
+    if not models_content.strip():
+        new_models_content = f"providers:\n{nine_router_block}\n"
+    else:
+        models_content = re.sub(r'(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\z)', '', models_content)
+        if re.search(r'(?m)^providers:\s*$', models_content):
+            new_models_content = re.sub(r'(?m)^providers:\s*$', f"providers:\n{nine_router_block}", models_content, count=1)
+        else:
+            new_models_content = f"providers:\n{nine_router_block}\n\n" + models_content.lstrip()
+
+    config_content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    if not config_content.strip():
+        new_config_content = f"{roles_block}\n"
+    else:
+        config_content = re.sub(r'(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_-]+:|\z)', '', config_content).strip()
+        if config_content:
+            new_config_content = f"{roles_block}\n\n{config_content}\n"
+        else:
+            new_config_content = f"{roles_block}\n"
+
+    models_path.write_text(new_models_content.rstrip() + "\n", encoding="utf-8")
+    config_path.write_text(new_config_content.rstrip() + "\n", encoding="utf-8")
     models_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     config_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     path = models_path

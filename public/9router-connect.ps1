@@ -133,8 +133,10 @@ if (-not [string]::IsNullOrWhiteSpace($Model)) {
   }
 }
 
+$HomeDir = if (-not [string]::IsNullOrWhiteSpace($env:NINEROUTER_HOME)) { $env:NINEROUTER_HOME } else { $HOME }
+
 if ($Tool -eq "claude") {
-  $path = Join-Path $HOME ".claude\settings.json"
+  $path = Join-Path $HomeDir ".claude\settings.json"
   $config = Read-JsonObject $path
   Backup-ConfigFile $path
   $envConfig = $config.PSObject.Properties["env"].Value
@@ -154,7 +156,7 @@ if ($Tool -eq "claude") {
   Write-JsonObject $path $config
 }
 elseif ($Tool -eq "opencode") {
-  $path = Join-Path $HOME ".config\opencode\opencode.json"
+  $path = Join-Path $HomeDir ".config\opencode\opencode.json"
   $config = Read-JsonObject $path
   Backup-ConfigFile $path
 
@@ -190,7 +192,7 @@ elseif ($Tool -eq "opencode") {
   Write-JsonObject $path $config
 }
 elseif ($Tool -eq "omp") {
-  $directory = Join-Path $HOME ".omp\agent"
+  $directory = Join-Path $HomeDir ".omp\agent"
   $modelsPath = Join-Path $directory "models.yml"
   $configPath = Join-Path $directory "config.yml"
   if (-not (Test-Path -LiteralPath $directory)) {
@@ -205,8 +207,7 @@ elseif ($Tool -eq "omp") {
   $escapedKey = $ApiKey.Replace("\", "\\").Replace('"', '\"')
   $escapedModel = $modelId.Replace("\", "\\").Replace('"', '\"')
 
-  $modelsYaml = @"
-providers:
+  $nineRouterBlock = @"
   9router:
     baseUrl: "$escapedUrl"
     apiKey: "$escapedKey"
@@ -222,20 +223,44 @@ providers:
           - "image"
 "@
 
-  $configYaml = @"
+  $rolesBlock = @"
 modelRoles:
   default: "9router/$escapedModel"
   smol: "9router/$escapedModel"
   slow: "9router/$escapedModel"
 "@
 
+  $modelsContent = if (Test-Path -LiteralPath $modelsPath) { [IO.File]::ReadAllText($modelsPath) } else { "" }
+  if ([string]::IsNullOrWhiteSpace($modelsContent)) {
+    $newModelsContent = "providers:`r`n$nineRouterBlock`r`n"
+  } else {
+    $modelsContent = [Regex]::Replace($modelsContent, "(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\z)", "")
+    if ($modelsContent -match "(?m)^providers:\s*$") {
+      $newModelsContent = [Regex]::Replace($modelsContent, "(?m)^providers:\s*$", "providers:`r`n$nineRouterBlock", 1)
+    } else {
+      $newModelsContent = "providers:`r`n$nineRouterBlock`r`n`r`n" + $modelsContent.TrimStart()
+    }
+  }
+
+  $configContent = if (Test-Path -LiteralPath $configPath) { [IO.File]::ReadAllText($configPath) } else { "" }
+  if ([string]::IsNullOrWhiteSpace($configContent)) {
+    $newConfigContent = "$rolesBlock`r`n"
+  } else {
+    $configContent = [Regex]::Replace($configContent, "(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_-]+:|\z)", "").Trim()
+    if (-not [string]::IsNullOrWhiteSpace($configContent)) {
+      $newConfigContent = "$rolesBlock`r`n`r`n$configContent`r`n"
+    } else {
+      $newConfigContent = "$rolesBlock`r`n"
+    }
+  }
+
   $utf8 = New-Object Text.UTF8Encoding($false)
-  [IO.File]::WriteAllText($modelsPath, $modelsYaml + [Environment]::NewLine, $utf8)
-  [IO.File]::WriteAllText($configPath, $configYaml + [Environment]::NewLine, $utf8)
+  [IO.File]::WriteAllText($modelsPath, $newModelsContent.TrimEnd() + [Environment]::NewLine, $utf8)
+  [IO.File]::WriteAllText($configPath, $newConfigContent.TrimEnd() + [Environment]::NewLine, $utf8)
   $path = $modelsPath
 }
 else {
-  $directory = Join-Path $HOME ".codex"
+  $directory = Join-Path $HomeDir ".codex"
   $configPath = Join-Path $directory "config.toml"
   $authPath = Join-Path $directory "auth.json"
   if (-not (Test-Path -LiteralPath $directory)) {

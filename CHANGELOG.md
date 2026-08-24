@@ -1,3 +1,8 @@
+# v0.5.63 (2026-08-24)
+
+## Fixes
+- **CLI Tools**: preserve existing models, providers, and settings when applying 9Router configuration to Oh My Pi (OMP) via downloaded setup scripts (`.bat`, `.sh`, `.command`)
+
 # v0.5.62 (2026-08-22)
 
 ## Features
