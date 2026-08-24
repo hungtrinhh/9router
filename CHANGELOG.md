@@ -1,3 +1,8 @@
+# v0.5.67 (2026-08-24)
+
+## Fixes
+- **CLI Tools**: show clear `(inherit)` dynamic placeholders for Smol, Slow, and Plan models in Oh My Pi (OMP) when not explicitly configured
+
 # v0.5.66 (2026-08-24)
 
 ## Fixes

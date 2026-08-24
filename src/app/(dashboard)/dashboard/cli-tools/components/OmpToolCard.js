@@ -637,7 +637,7 @@ ${modelEntries}`;
                 <ModelField
                   label="Smol Model"
                   value={smolModel}
-                  placeholder="claude-haiku-4-5 (optional)"
+                  placeholder={`${selectedModel || "Primary Model"} (inherit)`}
                   onChange={(val) => {
                     setSmolModel(val);
                     debouncedSave({ smolModel: val });
@@ -655,7 +655,7 @@ ${modelEntries}`;
                 <ModelField
                   label="Slow Model"
                   value={slowModel}
-                  placeholder="claude-opus-4-6 (optional)"
+                  placeholder={`${selectedModel || "Primary Model"} (inherit)`}
                   onChange={(val) => {
                     setSlowModel(val);
                     debouncedSave({ slowModel: val });
@@ -673,7 +673,7 @@ ${modelEntries}`;
                 <ModelField
                   label="Plan Model"
                   value={planModel}
-                  placeholder="claude-opus-4-6 (optional)"
+                  placeholder={`${selectedModel || "Primary Model"} (inherit)`}
                   onChange={(val) => {
                     setPlanModel(val);
                     debouncedSave({ planModel: val });
