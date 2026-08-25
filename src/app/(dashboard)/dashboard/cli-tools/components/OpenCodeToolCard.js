@@ -458,10 +458,7 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
       {modalOpen && (
         <ModelSelectModal
           isOpen={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            saveModels(selectedModelsRef.current);
-          }}
+          onClose={() => setModalOpen(false)}
           onSelect={(model) => {
             if (!selectedModels.includes(model.value)) {
               const next = [...selectedModels, model.value];
