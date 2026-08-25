@@ -42,9 +42,10 @@ async function buildClaudeHeader() {
   const result = await api.getCliToolSettings("claude");
   if (!result.success) return `  ${COLORS.red}Failed to load settings${COLORS.reset}`;
 
+  const saved = result.data.savedConfig;
   const settings = result.data.settings;
-  const currentUrl = settings?.env?.ANTHROPIC_BASE_URL;
-  const currentKey = settings?.env?.ANTHROPIC_AUTH_TOKEN;
+  const currentUrl = saved?.env?.ANTHROPIC_BASE_URL || settings?.env?.ANTHROPIC_BASE_URL;
+  const currentKey = saved?.env?.ANTHROPIC_AUTH_TOKEN || settings?.env?.ANTHROPIC_AUTH_TOKEN;
   const lines = [];
 
   if (currentUrl) {
@@ -68,7 +69,7 @@ async function buildClaudeHeader() {
  */
 async function getClaudeModel(envKey) {
   const result = await api.getCliToolSettings("claude");
-  return result.success ? (result.data.settings?.env?.[envKey] || result.data.savedConfig?.env?.[envKey] || "Not set") : "Not set";
+  return result.success ? (result.data.savedConfig?.env?.[envKey] || result.data.settings?.env?.[envKey] || "Not set") : "Not set";
 }
 
 /**
@@ -191,15 +192,12 @@ async function buildCodexHeader() {
     ].join("\n");
   }
 
-  // Parse base_url and model from raw TOML string
+  // Prioritize savedConfig from database, fallback to parsed TOML string
+  const saved = result.data.savedConfig;
   const baseUrlMatch = config && config.match(/base_url\s*=\s*"([^"]+)"/);
   const modelMatch = config && config.match(/^model\s*=\s*"([^"]+)"/m);
-  const baseUrl = baseUrlMatch ? baseUrlMatch[1] : "";
-  const model = modelMatch ? modelMatch[1] : "";
-
-  const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
-  if (baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${baseUrl}${COLORS.reset}`);
-  if (model)   lines.push(`Model:    ${COLORS.dim}${model}${COLORS.reset}`);
+  const baseUrl = saved?.baseUrl || (baseUrlMatch ? baseUrlMatch[1] : "");
+  const model = saved?.model || (modelMatch ? modelMatch[1] : "");
   return lines.join("\n");
 }
 
@@ -280,11 +278,11 @@ async function buildDroidHeader() {
     ].join("\n");
   }
 
-  // Extract 9Router custom model config
+  // Extract 9Router model config (prioritize savedConfig)
+  const saved = result.data.savedConfig;
   const custom = settings?.customModels?.find(m => m.id === "custom:9Router-0");
-  const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
-  if (custom?.baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${custom.baseUrl}${COLORS.reset}`);
-  if (custom?.model)   lines.push(`Model:    ${COLORS.dim}${custom.model}${COLORS.reset}`);
+  const baseUrl = saved?.baseUrl || custom?.baseUrl;
+  const model = saved?.activeModel || saved?.model || saved?.models?.[0] || custom?.model;
   return lines.join("\n");
 }
 
@@ -366,10 +364,13 @@ async function buildOpenClawHeader() {
     ].join("\n");
   }
 
-  // Extract 9Router provider config
+  // Extract 9Router provider config (prioritize savedConfig)
+  const saved = result.data.savedConfig;
   const provider = settings?.models?.providers?.["9router"];
   const primary = settings?.agents?.defaults?.model?.primary || "";
-  const model = primary.startsWith("9router/") ? primary.replace("9router/", "") : (provider?.models?.[0]?.id || "");
+  const fileModel = primary.startsWith("9router/") ? primary.replace("9router/", "") : (provider?.models?.[0]?.id || "");
+  const baseUrl = saved?.baseUrl || provider?.baseUrl;
+  const model = saved?.model || fileModel;
   const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
   if (provider?.baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${provider.baseUrl}${COLORS.reset}`);
   if (model)             lines.push(`Model:    ${COLORS.dim}${model}${COLORS.reset}`);
@@ -449,11 +450,15 @@ async function buildOpenCodeHeader() {
     ].join("\n");
   }
 
+  const saved = result.data.savedConfig;
+  const baseUrl = saved?.baseUrl || opencode?.baseURL;
+  const activeModel = saved?.activeModel || opencode?.activeModel;
+  const models = saved?.models?.length ? saved.models : (Array.isArray(opencode?.models) ? opencode.models : []);
   const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
-  if (opencode?.baseURL) lines.push(`Endpoint: ${COLORS.cyan}${opencode.baseURL}${COLORS.reset}`);
-  if (opencode?.activeModel) lines.push(`Active:   ${COLORS.dim}${opencode.activeModel}${COLORS.reset}`);
-  if (Array.isArray(opencode?.models) && opencode.models.length > 0) {
-    lines.push(`Models:   ${COLORS.dim}${opencode.models.join(", ")}${COLORS.reset}`);
+  if (baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${baseUrl}${COLORS.reset}`);
+  if (activeModel) lines.push(`Active:   ${COLORS.dim}${activeModel}${COLORS.reset}`);
+  if (models.length > 0) {
+    lines.push(`Models:   ${COLORS.dim}${models.join(", ")}${COLORS.reset}`);
   }
   return lines.join("\n");
 }
@@ -537,10 +542,10 @@ async function buildHermesHeader() {
     ].join("\n");
   }
 
-  const model = settings?.model || {};
-  const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
-  if (model.base_url) lines.push(`Endpoint: ${COLORS.cyan}${model.base_url}${COLORS.reset}`);
-  if (model.default)  lines.push(`Model:    ${COLORS.dim}${model.default}${COLORS.reset}`);
+  const saved = result.data.savedConfig;
+  const modelObj = settings?.model || {};
+  const baseUrl = saved?.baseUrl || modelObj.base_url;
+  const model = saved?.model || modelObj.default;
   return lines.join("\n");
 }
 
