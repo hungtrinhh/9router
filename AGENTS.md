@@ -56,3 +56,13 @@ This checkout is the user's fork. Treat the current code and manifests as author
 - Application code is JavaScript/ESM; `@/*` maps to `src/*` and `open-sse/*` maps to the engine. `custom-server.js` is intentionally CommonJS.
 - Keep provider/model/format constants in `open-sse/config/` and translator enums in `open-sse/translator/schema/`; avoid duplicated role, block, model, URL, and timeout literals.
 - Security-sensitive environment variables are documented in `.env.example`; never commit generated `.env`, credentials, database files, or API keys.
+
+## Agent Tooling (CodeGraph & RTK)
+
+- **CodeGraph**: The repository is indexed with CodeGraph (`.codegraph/`). Always leverage `codegraph` for structural code exploration, symbol navigation, call-graph analysis, and impact assessment:
+  - `codegraph query <symbol>` — Find symbols and definitions.
+  - `codegraph explore <query>` — Explore an area, symbol sources, and call paths.
+  - `codegraph callers <symbol>` / `codegraph callees <symbol>` — Trace upstream and downstream dependencies.
+  - `codegraph impact <symbol>` — Assess blast radius before refactoring or changing shared symbols.
+  - `codegraph sync` — Re-sync the index after making significant file changes.
+- **RTK**: Use `rtk` directly when executing CLI operations (e.g. `rtk git status`, `rtk git diff`, `rtk <cmd>`) to optimize token output.
