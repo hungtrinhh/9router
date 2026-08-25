@@ -6,7 +6,7 @@ import path from "path";
 import os from "os";
 import { exec } from "child_process";
 import { promisify } from "util";
-import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
+import { getCliToolConfig, setCliToolConfig, deleteCliToolConfig } from "@/lib/db/index.js";
 import { parseYAML, stringifyYAML } from "confbox";
 import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
 
@@ -96,8 +96,15 @@ const has9RouterConfig = (modelsData) => {
 export async function GET() {
   try {
     const isInstalled = await checkOmpInstalled();
+    const savedConfig = await getCliToolConfig("omp");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
 
-    if (!isInstalled) {
+    // The persisted DB snapshot is the durable source of truth (it lives on the
+    // mounted data volume); the ~/.omp yaml files are only valid for a local CLI
+    // install and are lost on container recreate. Only show the install prompt
+    // when there is neither a local CLI nor a persisted snapshot.
+    if (!isInstalled && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         settings: null,
@@ -105,46 +112,58 @@ export async function GET() {
       });
     }
 
-    const modelsData = await readModelsYaml();
-    const configData = await readConfigYaml();
+    const modelsData = isInstalled ? await readModelsYaml() : {};
+    const configData = isInstalled ? await readConfigYaml() : {};
     const providerConfig = modelsData?.providers?.["9router"];
-
     const rawModels = providerConfig?.models || [];
     const modelIds = rawModels.map((m) => (typeof m === "string" ? m : m.id)).filter(Boolean);
 
-    const defaultRole = configData?.modelRoles?.default;
-    const activeModel = defaultRole?.startsWith("9router/")
-      ? defaultRole.replace(/^9router\//, "").split(":")[0]
-      : (modelIds[0] || null);
+    const yamlActiveModel = (() => {
+      const role = configData?.modelRoles?.default;
+      return role?.startsWith("9router/")
+        ? role.replace(/^9router\//, "").split(":")[0]
+        : (modelIds[0] || null);
+    })();
 
-    const smolRole = configData?.modelRoles?.smol;
-    const smolModel = smolRole?.startsWith("9router/")
-      ? smolRole.replace(/^9router\//, "").split(":")[0]
-      : null;
-
-    const slowRole = configData?.modelRoles?.slow;
-    const slowModel = slowRole?.startsWith("9router/")
-      ? slowRole.replace(/^9router\//, "").split(":")[0]
-      : null;
-
-    const planRole = configData?.modelRoles?.plan;
-    const planModel = planRole?.startsWith("9router/")
-      ? planRole.replace(/^9router\//, "").split(":")[0]
-      : null;
+    const yamlRole = (roleName) => {
+      const role = configData?.modelRoles?.[roleName];
+      return role?.startsWith("9router/")
+        ? role.replace(/^9router\//, "").split(":")[0]
+        : null;
+    };
 
     // Parse subagent overrides from configData["task.agentModelOverrides"]
     const rawAgentOverrides = configData?.["task.agentModelOverrides"] || configData?.agentModelOverrides || {};
-    const subagentModels = {};
+    const yamlSubagentModels = {};
     for (const name of OMP_SUBAGENT_NAMES) {
       const val = rawAgentOverrides[name];
       if (typeof val === "string" && val.startsWith("9router/")) {
-        subagentModels[name] = val.replace(/^9router\//, "").split(":")[0];
+        yamlSubagentModels[name] = val.replace(/^9router\//, "").split(":")[0];
       } else if (typeof val === "string" && val.trim()) {
-        subagentModels[name] = val.trim();
+        yamlSubagentModels[name] = val.trim();
       }
     }
 
-    const savedConfig = await getCliToolConfig("omp");
+    const hasPersistedSubagents =
+      savedConfig?.subagentModels && typeof savedConfig.subagentModels === "object"
+        ? Object.values(savedConfig.subagentModels).some((v) => typeof v === "string" && v.trim())
+        : false;
+
+    // Persisted DB config is the source of truth so settings survive container
+    // restarts (the ~/.omp yaml files live outside any mounted volume). Fall back
+    // to the yaml files only for fields that were never persisted.
+    const omp = {
+      models: Array.isArray(savedConfig?.models) && savedConfig.models.length > 0
+        ? savedConfig.models
+        : modelIds,
+      activeModel: savedConfig?.activeModel || savedConfig?.model || yamlActiveModel,
+      smolModel: savedConfig?.smolModel || yamlRole("smol") || "",
+      slowModel: savedConfig?.slowModel || yamlRole("slow") || "",
+      planModel: savedConfig?.planModel || yamlRole("plan") || "",
+      subagentModels: hasPersistedSubagents ? savedConfig.subagentModels : yamlSubagentModels,
+      baseUrl: savedConfig?.baseUrl || providerConfig?.baseUrl || null,
+      apiKey: savedConfig?.apiKey || providerConfig?.apiKey || null,
+    };
 
     return NextResponse.json({
       installed: true,
@@ -153,20 +172,11 @@ export async function GET() {
         config: configData,
         provider: providerConfig || null,
       },
-      has9Router: has9RouterConfig(modelsData),
+      has9Router: has9RouterConfig(modelsData) || Boolean(savedConfig?.baseUrl),
       savedConfig,
       configPath: getConfigPath(),
       modelsPath: getModelsPath(),
-      omp: {
-        models: modelIds,
-        activeModel,
-        smolModel,
-        slowModel,
-        planModel,
-        subagentModels,
-        baseUrl: providerConfig?.baseUrl || null,
-        apiKey: providerConfig?.apiKey || null,
-      },
+      omp,
     });
   } catch (error) {
     console.log("Error checking omp settings:", error);
@@ -277,7 +287,11 @@ export async function POST(request) {
       delete configData.modelRoles.plan;
     }
 
-    // Update task.agentModelOverrides in config.yml
+    // Merge with any previously persisted subagent overrides so clearing one
+    // field in the form does not wipe the others when the frontend sends only
+    // the fields currently being edited.
+    const savedConfig = await getCliToolConfig("omp");
+    const mergedSubagentModels = { ...(savedConfig?.subagentModels || {}) };
     if (subagentModels && typeof subagentModels === "object") {
       if (!configData["task.agentModelOverrides"]) {
         configData["task.agentModelOverrides"] = {};
@@ -288,8 +302,12 @@ export async function POST(request) {
           configData["task.agentModelOverrides"][agentName] = trimmed.startsWith("9router/")
             ? trimmed
             : `9router/${trimmed}`;
-        } else if (configData["task.agentModelOverrides"][agentName]?.startsWith("9router/")) {
-          delete configData["task.agentModelOverrides"][agentName];
+          mergedSubagentModels[agentName] = trimmed;
+        } else {
+          delete mergedSubagentModels[agentName];
+          if (configData["task.agentModelOverrides"][agentName]?.startsWith("9router/")) {
+            delete configData["task.agentModelOverrides"][agentName];
+          }
         }
       }
       if (Object.keys(configData["task.agentModelOverrides"]).length === 0) {
@@ -299,7 +317,9 @@ export async function POST(request) {
 
     await fs.writeFile(getConfigPath(), stringifyYAML(configData), "utf-8");
 
-    // Save model settings to database for cross-machine sync
+    // Save model settings to database for cross-machine sync. baseUrl/apiKey are
+    // persisted too so the dashboard restores the full form after a container
+    // restart (the ~/.omp yaml files are not part of any mounted volume).
     await setCliToolConfig("omp", {
       model: primaryModel,
       models: modelsArray,
@@ -307,7 +327,9 @@ export async function POST(request) {
       smolModel,
       slowModel,
       planModel,
-      subagentModels,
+      subagentModels: mergedSubagentModels,
+      baseUrl: normalizedBaseUrl,
+      apiKey: keyToUse,
     });
 
     return NextResponse.json({
@@ -359,6 +381,9 @@ export async function DELETE() {
     }
 
     await fs.writeFile(getConfigPath(), stringifyYAML(configData), "utf-8");
+
+    // Remove the persisted DB snapshot so the dashboard form resets too.
+    await deleteCliToolConfig("omp");
 
     return NextResponse.json({
       success: true,

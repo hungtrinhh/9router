@@ -1,3 +1,8 @@
+# v0.5.69 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: persist Oh My Pi (OMP) model settings (including endpoint and API key) in the database and restore them from there after container restarts, instead of relying on `~/.omp` YAML files that live outside the mounted data volume; merge subagent overrides on save so editing one field no longer drops the others
+
 # v0.5.68 (2026-08-24)
 
 ## Fixes
