@@ -1,3 +1,8 @@
+# v0.5.77 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: standardize `hasInitialized` refs and stabilize `useEffect` dependencies across all tool cards (Cline, Codex, Copilot, Cowork, Kilo, OpenCode, OMP, Grok-Build) to prevent input resets and infinite re-render loops when selecting or typing models
+
 # v0.5.76 (2026-08-25)
 
 ## Fixes
