@@ -363,6 +363,8 @@ export async function POST(request) {
       plugins: pluginsArray,
       localPlugins: localPluginNames,
       customPlugins: customPluginsArray,
+      baseUrl,
+      apiKey,
     });
     return NextResponse.json({
       success: true,

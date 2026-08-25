@@ -57,8 +57,11 @@ const has9RouterConfig = (settings) => {
 export async function GET() {
   try {
     const isInstalled = await checkDroidInstalled();
-    
-    if (!isInstalled) {
+    const savedConfig = await getCliToolConfig("droid");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!isInstalled && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         settings: null,
@@ -66,14 +69,12 @@ export async function GET() {
       });
     }
 
-    const settings = await readSettings();
-
-    const savedConfig = await getCliToolConfig("droid");
+    const settings = isInstalled ? await readSettings() : null;
 
     return NextResponse.json({
-      installed: true,
+      installed: isInstalled || hasPersisted,
       settings,
-      has9Router: has9RouterConfig(settings),
+      has9Router: has9RouterConfig(settings) || Boolean(savedConfig?.models?.length || savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       settingsPath: getDroidSettingsPath(),
     });
@@ -170,6 +171,8 @@ export async function POST(request) {
       model: modelsArray[0],
       models: modelsArray,
       activeModel: typeof activeModel === "string" ? activeModel : modelsArray[0],
+      baseUrl: normalizedBaseUrl,
+      apiKey,
     });
     return NextResponse.json({
       success: true,

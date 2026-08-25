@@ -106,16 +106,19 @@ const has9RouterConfig = (config) => {
 export async function GET() {
     try {
         const installed = await checkDeepSeekInstalled();
-        if (!installed) {
+        const savedConfig = await getCliToolConfig("deepseek-tui");
+        const hasPersisted =
+            savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+        if (!installed && !hasPersisted) {
             return NextResponse.json({ installed: false, settings: null, message: "DeepSeek TUI is not installed" });
         }
-        const toml = await readConfigToml();
+        const toml = installed ? await readConfigToml() : "";
         const config = parseToml(toml);
-        const savedConfig = await getCliToolConfig("deepseek-tui");
         return NextResponse.json({
-            installed: true,
+            installed: installed || hasPersisted,
             settings: config,
-            has9Router: has9RouterConfig(config),
+            has9Router: has9RouterConfig(config) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
             savedConfig,
             configPath: getDeepSeekConfigPath(),
         });
@@ -139,7 +142,7 @@ export async function POST(request) {
         await fs.writeFile(getDeepSeekConfigPath(), newConfig);
 
         // Save model settings to database for cross-machine sync
-        await setCliToolConfig("deepseek-tui", { model });
+        await setCliToolConfig("deepseek-tui", { model, baseUrl, apiKey });
 
         return NextResponse.json({
             success: true,

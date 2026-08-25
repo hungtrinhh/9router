@@ -56,15 +56,18 @@ const has9RouterConfig = (auth) => {
 export async function GET() {
   try {
     const installed = await checkInstalled();
-    if (!installed) {
+    const savedConfig = await getCliToolConfig("kilo");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!installed && !hasPersisted) {
       return NextResponse.json({ installed: false, settings: null, message: "Kilo Code CLI is not installed" });
     }
-    const auth = await readJson(getAuthPath());
-    const savedConfig = await getCliToolConfig("kilo");
+    const auth = installed ? await readJson(getAuthPath()) : null;
     return NextResponse.json({
-      installed: true,
+      installed: installed || hasPersisted,
       settings: { auth: auth ? Object.keys(auth) : [] },
-      has9Router: has9RouterConfig(auth),
+      has9Router: has9RouterConfig(auth) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       authPath: getAuthPath(),
     });
@@ -94,7 +97,7 @@ export async function POST(request) {
     };
     await fs.writeFile(getAuthPath(), JSON.stringify(auth, null, 2));
     // Save model settings to database for cross-machine sync
-    await setCliToolConfig("kilo", { model });
+    await setCliToolConfig("kilo", { model, baseUrl: normalizedBaseUrl, apiKey });
 
     // Best-effort: update VS Code extension settings
     try {

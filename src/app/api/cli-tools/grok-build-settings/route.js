@@ -76,7 +76,11 @@ const has9RouterConfig = (settings) => Boolean(settings?.model?.base_url);
 export async function GET() {
   try {
     const installed = await checkGrokInstalled();
-    if (!installed) {
+    const savedConfig = await getCliToolConfig("grok-build");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!installed && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         settings: null,
@@ -84,12 +88,11 @@ export async function GET() {
       });
     }
 
-    const settings = parseGrokBuildConfig(await readConfigToml());
-    const savedConfig = await getCliToolConfig("grok-build");
+    const settings = installed ? parseGrokBuildConfig(await readConfigToml()) : null;
     return NextResponse.json({
-      installed: true,
+      installed: installed || hasPersisted,
       settings,
-      has9Router: has9RouterConfig(settings),
+      has9Router: has9RouterConfig(settings) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       configPath: getGrokConfigPath(),
     });
@@ -123,6 +126,8 @@ export async function POST(request) {
       model: selectedModel,
       contextWindow: normalizeContextWindow(contextWindow, selectedModel),
       subagentModels: normalizeSubagentModels(subagentModels),
+      baseUrl: normalizedBaseUrl,
+      apiKey,
     });
 
     return NextResponse.json({

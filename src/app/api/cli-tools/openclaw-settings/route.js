@@ -80,8 +80,11 @@ const readAgentModel = async (agentDir) => {
 export async function GET() {
   try {
     const isInstalled = await checkOpenClawInstalled();
-    
-    if (!isInstalled) {
+    const savedConfig = await getCliToolConfig("openclaw");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!isInstalled && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         settings: null,
@@ -89,26 +92,20 @@ export async function GET() {
       });
     }
 
-    const settings = await readSettings();
-
-    // Enrich agents list with current per-agent model from models.json.
-    // Coerce agent.model to its string id when OpenClaw stores it as
-    // `{ primary, fallbacks }` so downstream `.startsWith()` calls work.
+    const settings = isInstalled ? await readSettings() : null;
     const agentList = settings?.agents?.list || [];
-    const enrichedAgents = await Promise.all(
+    const enrichedAgents = isInstalled ? await Promise.all(
       agentList.map(async (agent) => {
         const agentModel = agent.agentDir ? await readAgentModel(agent.agentDir) : null;
         return { ...agent, model: resolveAgentModel(agent.model), currentModel: agentModel };
       })
-    );
-
-    const savedConfig = await getCliToolConfig("openclaw");
+    ) : [];
 
     return NextResponse.json({
-      installed: true,
+      installed: isInstalled || hasPersisted,
       settings,
       agents: enrichedAgents,
-      has9Router: has9RouterConfig(settings),
+      has9Router: has9RouterConfig(settings) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       settingsPath: getOpenClawSettingsPath(),
     });
@@ -228,7 +225,7 @@ export async function POST(request) {
     await fs.writeFile(settingsPath, JSON.stringify(settings, null, 2));
 
     // Save model settings to database for cross-machine sync
-    await setCliToolConfig("openclaw", { model, agentModels });
+    await setCliToolConfig("openclaw", { model, agentModels, baseUrl: normalizedBaseUrl, apiKey });
 
     return NextResponse.json({
       success: true,

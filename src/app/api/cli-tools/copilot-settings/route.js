@@ -113,7 +113,7 @@ export async function POST(request) {
 
 
     // Save model settings to database for cross-machine sync
-    await setCliToolConfig("copilot", { models });
+    await setCliToolConfig("copilot", { models, baseUrl, apiKey });
     return NextResponse.json({
       success: true,
       message: "Copilot settings applied! Reload VS Code to take effect.",

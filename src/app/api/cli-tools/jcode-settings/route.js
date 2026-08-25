@@ -110,20 +110,22 @@ const writeProviderEnv = async (env) => {
 
 export async function GET() {
   const isInstalled = await checkJcodeInstalled();
+  const savedConfig = await getCliToolConfig("jcode");
+  const hasPersisted =
+    savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
 
-  if (!isInstalled) {
+  if (!isInstalled && !hasPersisted) {
     return NextResponse.json({
       installed: false,
       message: "jcode not installed. Install via: curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/install.sh | bash",
     });
   }
 
-  const config = await readConfig();
-  const has9Router = has9RouterConfig(config);
-  const savedConfig = await getCliToolConfig("jcode");
+  const config = isInstalled ? await readConfig() : null;
+  const has9Router = has9RouterConfig(config) || Boolean(savedConfig?.models?.length || savedConfig?.default_model || savedConfig?.baseUrl);
 
   return NextResponse.json({
-    installed: true,
+    installed: isInstalled || hasPersisted,
     config,
     has9Router,
     savedConfig,
@@ -174,7 +176,7 @@ export async function POST(request) {
     const env = await readProviderEnv();
 
     // Save model settings to database for cross-machine sync
-    await setCliToolConfig("jcode", { models, default_model: models && models.length > 0 ? models[0] : "cc/claude-opus-4-7" });
+    await setCliToolConfig("jcode", { models, default_model: models && models.length > 0 ? models[0] : "cc/claude-opus-4-7", baseUrl: normalizedBaseUrl, apiKey });
     env.JCODE_9ROUTER_API_KEY = apiKey;
     await writeProviderEnv(env);
 

@@ -27,14 +27,6 @@ export async function PUT(request) {
       return NextResponse.json({ error: "tool and mappings required" }, { status: 400 });
     }
 
-    // Check if DNS is enabled for this tool
-    const status = await getMitmStatus();
-    if (!status.dnsStatus || !status.dnsStatus[tool]) {
-      return NextResponse.json(
-        { error: `DNS must be enabled for ${tool} before editing model mappings` },
-        { status: 403 }
-      );
-    }
 
     const filtered = {};
     for (const [alias, model] of Object.entries(mappings)) {

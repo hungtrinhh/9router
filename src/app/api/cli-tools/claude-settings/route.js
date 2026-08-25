@@ -92,8 +92,11 @@ const readSettings = async () => {
 export async function GET() {
   try {
     const isInstalled = await checkClaudeInstalled();
-    
-    if (!isInstalled) {
+    const savedConfig = await getCliToolConfig("claude");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!isInstalled && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         settings: null,
@@ -101,17 +104,16 @@ export async function GET() {
       });
     }
 
-    const settings = await readSettings();
-    const has9Router = !!(settings?.env?.ANTHROPIC_BASE_URL);
-    const claudeJson = await readClaudeJson();
-
-    const savedConfig = await getCliToolConfig("claude");
+    const settings = isInstalled ? await readSettings() : null;
+    const has9Router =
+      Boolean(settings?.env?.ANTHROPIC_BASE_URL) || Boolean(savedConfig?.env?.ANTHROPIC_BASE_URL);
+    const claudeJson = isInstalled ? await readClaudeJson() : null;
 
     return NextResponse.json({
-      installed: true,
-      settings: settings,
-      has9Router: has9Router,
-      exaMcpEnabled: !!claudeJson?.mcpServers?.exa,
+      installed: isInstalled || hasPersisted,
+      settings: settings || (savedConfig?.env ? { env: savedConfig.env } : null),
+      has9Router,
+      exaMcpEnabled: Boolean(claudeJson?.mcpServers?.exa) || Boolean(savedConfig?.exaMcpEnabled),
       savedConfig,
       settingsPath: getClaudeSettingsPath(),
     });

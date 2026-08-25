@@ -58,8 +58,11 @@ const has9RouterConfig = (config) => {
 export async function GET() {
   try {
     const isInstalled = await checkOpenCodeInstalled();
+    const savedConfig = await getCliToolConfig("opencode");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
 
-    if (!isInstalled) {
+    if (!isInstalled && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         config: null,
@@ -67,14 +70,12 @@ export async function GET() {
       });
     }
 
-    const config = await readConfig();
+    const config = isInstalled ? await readConfig() : null;
     const providerConfig = config?.provider?.["9router"];
     const modelMap = providerConfig?.models || {};
 
-    const savedConfig = await getCliToolConfig("opencode");
-
     return NextResponse.json({
-      installed: true,
+      installed: isInstalled || hasPersisted,
       config,
       has9Router: has9RouterConfig(config) || Boolean(savedConfig?.baseUrl),
       savedConfig,
@@ -173,6 +174,8 @@ export async function POST(request) {
       models: modelsArray,
       activeModel: typeof activeModel === "string" ? activeModel : modelsArray[0],
       subagentModel: effectiveSubagentModel,
+      baseUrl: normalizedBaseUrl,
+      apiKey: keyToUse,
     });
 
     return NextResponse.json({

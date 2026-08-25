@@ -103,16 +103,19 @@ const has9RouterConfig = (modelCfg) => {
 export async function GET() {
   try {
     const installed = await checkHermesInstalled();
-    if (!installed) {
+    const savedConfig = await getCliToolConfig("hermes");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!installed && !hasPersisted) {
       return NextResponse.json({ installed: false, settings: null, message: "Hermes Agent is not installed" });
     }
-    const yaml = await readConfigYaml();
-    const savedConfig = await getCliToolConfig("hermes");
+    const yaml = installed ? await readConfigYaml() : "";
     const model = parseModelBlock(yaml);
     return NextResponse.json({
-      installed: true,
+      installed: installed || hasPersisted,
       settings: { model },
-      has9Router: has9RouterConfig(model),
+      has9Router: has9RouterConfig(model) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       configPath: getHermesConfigPath(),
     });
@@ -147,7 +150,7 @@ export async function POST(request) {
     }
 
     // Save model settings to database for cross-machine sync
-    await setCliToolConfig("hermes", { model });
+    await setCliToolConfig("hermes", { model, baseUrl: normalizedBaseUrl, apiKey });
 
     return NextResponse.json({
       success: true,

@@ -56,20 +56,23 @@ const has9RouterConfig = (globalState) => {
 export async function GET() {
   try {
     const installed = await checkInstalled();
-    if (!installed) {
+    const savedConfig = await getCliToolConfig("cline");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!installed && !hasPersisted) {
       return NextResponse.json({ installed: false, settings: null, message: "Cline CLI is not installed" });
     }
-    const globalState = await readJson(getGlobalStatePath());
-    const savedConfig = await getCliToolConfig("cline");
+    const globalState = installed ? await readJson(getGlobalStatePath()) : null;
     return NextResponse.json({
-      installed: true,
+      installed: installed || hasPersisted,
       settings: {
-        actModeApiProvider: globalState?.actModeApiProvider,
-        planModeApiProvider: globalState?.planModeApiProvider,
-        openAiBaseUrl: globalState?.openAiBaseUrl,
-        openAiModelId: globalState?.openAiModelId,
+        actModeApiProvider: globalState?.actModeApiProvider || "openai",
+        planModeApiProvider: globalState?.planModeApiProvider || "openai",
+        openAiBaseUrl: globalState?.openAiBaseUrl || savedConfig?.baseUrl,
+        openAiModelId: savedConfig?.model || globalState?.openAiModelId,
       },
-      has9Router: has9RouterConfig(globalState),
+      has9Router: has9RouterConfig(globalState) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       globalStatePath: getGlobalStatePath(),
     });
@@ -105,7 +108,7 @@ export async function POST(request) {
 
 
     // Save model settings to database for cross-machine sync
-    await setCliToolConfig("cline", { model });
+    await setCliToolConfig("cline", { model, baseUrl: normalizedBaseUrl, apiKey });
     return NextResponse.json({ success: true, message: "Cline settings applied successfully!", globalStatePath: getGlobalStatePath() });
   } catch (error) {
     console.log("Error updating cline settings:", error);

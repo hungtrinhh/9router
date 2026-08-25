@@ -84,8 +84,11 @@ const has9RouterConfig = (config) => {
 export async function GET() {
   try {
     const isInstalled = await checkCodexInstalled();
-    
-    if (!isInstalled) {
+    const savedConfig = await getCliToolConfig("codex");
+    const hasPersisted =
+      savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
+
+    if (!isInstalled && !hasPersisted) {
       return NextResponse.json({
         installed: false,
         config: null,
@@ -93,14 +96,12 @@ export async function GET() {
       });
     }
 
-    const config = await readConfig();
-
-    const savedConfig = await getCliToolConfig("codex");
+    const config = isInstalled ? await readConfig() : null;
 
     return NextResponse.json({
-      installed: true,
+      installed: isInstalled || hasPersisted,
       config,
-      has9Router: has9RouterConfig(config),
+      has9Router: has9RouterConfig(config) || Boolean(savedConfig?.model || savedConfig?.baseUrl),
       savedConfig,
       configPath: getCodexConfigPath(),
     });
@@ -173,6 +174,8 @@ export async function POST(request) {
     await setCliToolConfig("codex", {
       model,
       subagentModel: effectiveSubagentModel,
+      baseUrl: effectiveBaseUrl,
+      apiKey,
     });
     return NextResponse.json({
       success: true,
