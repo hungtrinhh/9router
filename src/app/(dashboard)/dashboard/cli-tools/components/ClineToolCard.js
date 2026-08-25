@@ -36,11 +36,15 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   }, [isExpanded]);
 
+  const hasInitializedModel = useRef(false);
   useEffect(() => {
-    if (status?.savedConfig?.model) {
-      setSelectedModel(status.savedConfig.model);
-    } else if (status?.settings?.openAiModelId) {
-      setSelectedModel(status.settings.openAiModelId);
+    if (status && !hasInitializedModel.current) {
+      hasInitializedModel.current = true;
+      if (status?.savedConfig?.model) {
+        setSelectedModel(status.savedConfig.model);
+      } else if (status?.settings?.openAiModelId) {
+        setSelectedModel(status.settings.openAiModelId);
+      }
     }
   }, [status]);
 

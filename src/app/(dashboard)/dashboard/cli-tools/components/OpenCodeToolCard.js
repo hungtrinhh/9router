@@ -49,23 +49,27 @@ export default function OpenCodeToolCard({ tool, isExpanded, onToggle, baseUrl, 
   }, [isExpanded]);
 
   // Sync models from existing config
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    if (status?.savedConfig?.models?.length) {
-      setSelectedModels(status.savedConfig.models);
-    } else if (status?.opencode?.models?.length) {
-      setSelectedModels(status.opencode.models);
-    }
-    if (status?.savedConfig?.activeModel) {
-      setActiveModel(status.savedConfig.activeModel);
-    } else if (status?.opencode?.activeModel) {
-      setActiveModel(status.opencode.activeModel);
-    }
+    if (status && !hasInitialized.current) {
+      hasInitialized.current = true;
+      if (status?.savedConfig?.models?.length) {
+        setSelectedModels(status.savedConfig.models);
+      } else if (status?.opencode?.models?.length) {
+        setSelectedModels(status.opencode.models);
+      }
+      if (status?.savedConfig?.activeModel) {
+        setActiveModel(status.savedConfig.activeModel);
+      } else if (status?.opencode?.activeModel) {
+        setActiveModel(status.opencode.activeModel);
+      }
 
-    // Parse subagent settings from savedConfig, fallback to agent.explorer
-    if (status?.savedConfig?.subagentModel) {
-      setSubagentModel(status.savedConfig.subagentModel);
-    } else if (status?.config?.agent?.explorer?.model?.startsWith("9router/")) {
-      setSubagentModel(status.config.agent.explorer.model.replace("9router/", ""));
+      // Parse subagent settings from savedConfig, fallback to agent.explorer
+      if (status?.savedConfig?.subagentModel) {
+        setSubagentModel(status.savedConfig.subagentModel);
+      } else if (status?.config?.agent?.explorer?.model?.startsWith("9router/")) {
+        setSubagentModel(status.config.agent.explorer.model.replace("9router/", ""));
+      }
     }
   }, [status]);
 

@@ -51,18 +51,21 @@ export default function CodexToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   };
 
-  // Parse model and subagent settings from config content
+  const hasInitializedModel = useRef(false);
   useEffect(() => {
-    if (codexStatus?.savedConfig) {
-      if (codexStatus.savedConfig.model) setSelectedModel(codexStatus.savedConfig.model);
-      if (codexStatus.savedConfig.subagentModel) setSubagentModel(codexStatus.savedConfig.subagentModel);
-    } else if (codexStatus?.config) {
-      const modelMatch = codexStatus.config.match(/^model\s*=\s*"([^"]+)"/m);
-      if (modelMatch) setSelectedModel(modelMatch[1]);
+    if (codexStatus && !hasInitializedModel.current) {
+      hasInitializedModel.current = true;
+      if (codexStatus?.savedConfig) {
+        if (codexStatus.savedConfig.model) setSelectedModel(codexStatus.savedConfig.model);
+        if (codexStatus.savedConfig.subagentModel) setSubagentModel(codexStatus.savedConfig.subagentModel);
+      } else if (codexStatus?.config) {
+        const modelMatch = codexStatus.config.match(/^model\s*=\s*"([^"]+)"/m);
+        if (modelMatch) setSelectedModel(modelMatch[1]);
 
-      // Parse subagent settings
-      const subagentModelMatch = codexStatus.config.match(/\[agents\.subagent\]\s*\n\s*model\s*=\s*"([^"]+)"/m);
-      if (subagentModelMatch) setSubagentModel(subagentModelMatch[1]);
+        // Parse subagent settings
+        const subagentModelMatch = codexStatus.config.match(/\[agents\.subagent\]\s*\n\s*model\s*=\s*"([^"]+)"/m);
+        if (subagentModelMatch) setSubagentModel(subagentModelMatch[1]);
+      }
     }
   }, [codexStatus]);
 

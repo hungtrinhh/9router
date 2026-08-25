@@ -156,11 +156,11 @@ export default function OmpToolCard({
       }
       if (status?.omp?.apiKey) {
         setSelectedApiKey(status.omp.apiKey);
-      } else if (apiKeys?.length > 0 && !selectedApiKey) {
-        setSelectedApiKey(apiKeys[0].key);
+      } else if (apiKeys?.length > 0) {
+        setSelectedApiKey((prev) => prev || apiKeys[0].key);
       }
     },
-    [apiKeys, selectedApiKey]
+    [apiKeys]
   );
 
   const fetchModelAliases = useCallback(async () => {
@@ -192,17 +192,11 @@ export default function OmpToolCard({
   );
 
   useEffect(() => {
-    if (!isExpanded) return;
-    let cancelled = false;
-    const synchronize = async () => {
-      if (!hasFetchedStatus.current) await checkOmpStatus({ hydrate: true });
-      if (!cancelled) await fetchModelAliases();
-    };
-    synchronize();
-    return () => {
-      cancelled = true;
-    };
-  }, [isExpanded, checkOmpStatus, fetchModelAliases]);
+    if (isExpanded) {
+      if (!hasFetchedStatus.current) checkOmpStatus({ hydrate: true });
+      fetchModelAliases();
+    }
+  }, [isExpanded]);
 
   const normalizeLocalhost = (url) => url.replace("://localhost", "://127.0.0.1");
 

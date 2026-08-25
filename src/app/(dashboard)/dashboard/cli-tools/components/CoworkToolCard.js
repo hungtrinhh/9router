@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, Button, ManualConfigModal, ComboFormModal, McpMarketplaceModal, ModelSelectModal } from "@/shared/components";
 import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
@@ -75,26 +75,30 @@ export default function CoworkToolCard({
       .catch(() => {});
   }, [isExpanded]);
 
+  const hasInitialized = useRef(false);
   useEffect(() => {
-    if (status?.savedConfig?.models?.length) {
-      setSelectedModels(status.savedConfig.models);
-    } else if (status?.cowork?.models?.length) {
-      setSelectedModels(status.cowork.models);
-    }
-    if (status?.cowork?.baseUrl && !customBaseUrl) {
-      setCustomBaseUrl(stripV1(status.cowork.baseUrl));
-    }
-    // Initialize plugins: from current config, fallback to defaultPlugins
-    if (Array.isArray(status?.cowork?.plugins) && status.cowork.plugins.length > 0) {
-      setPlugins(status.cowork.plugins);
-    } else if (plugins.length === 0 && Array.isArray(status?.defaultPlugins)) {
-      setPlugins(status.defaultPlugins);
-    }
-    if (Array.isArray(status?.cowork?.localPlugins)) {
-      setLocalPlugins(status.cowork.localPlugins);
-    }
-    if (Array.isArray(status?.cowork?.customPlugins) && status.cowork.customPlugins.length > 0) {
-      setCustomPlugins(status.cowork.customPlugins);
+    if (status && !hasInitialized.current) {
+      hasInitialized.current = true;
+      if (status?.savedConfig?.models?.length) {
+        setSelectedModels(status.savedConfig.models);
+      } else if (status?.cowork?.models?.length) {
+        setSelectedModels(status.cowork.models);
+      }
+      if (status?.cowork?.baseUrl && !customBaseUrl) {
+        setCustomBaseUrl(stripV1(status.cowork.baseUrl));
+      }
+      // Initialize plugins: from current config, fallback to defaultPlugins
+      if (Array.isArray(status?.cowork?.plugins) && status.cowork.plugins.length > 0) {
+        setPlugins(status.cowork.plugins);
+      } else if (plugins.length === 0 && Array.isArray(status?.defaultPlugins)) {
+        setPlugins(status.defaultPlugins);
+      }
+      if (Array.isArray(status?.cowork?.localPlugins)) {
+        setLocalPlugins(status.cowork.localPlugins);
+      }
+      if (Array.isArray(status?.cowork?.customPlugins) && status.cowork.customPlugins.length > 0) {
+        setCustomPlugins(status.cowork.customPlugins);
+      }
     }
   }, [status]);
 

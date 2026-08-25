@@ -29,9 +29,13 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
     if (initialStatus) setStatus(initialStatus);
   }, [initialStatus]);
 
+  const hasInitializedModel = useRef(false);
   useEffect(() => {
-    if (status?.savedConfig?.model) {
-      setSelectedModel(status.savedConfig.model);
+    if (status && !hasInitializedModel.current) {
+      hasInitializedModel.current = true;
+      if (status?.savedConfig?.model) {
+        setSelectedModel(status.savedConfig.model);
+      }
     }
   }, [status]);
 

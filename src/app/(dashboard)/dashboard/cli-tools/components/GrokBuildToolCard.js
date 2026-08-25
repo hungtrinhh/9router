@@ -142,15 +142,11 @@ export default function GrokBuildToolCard({
   }, [hydrateForm]);
 
   useEffect(() => {
-    if (!isExpanded) return;
-    let cancelled = false;
-    const synchronize = async () => {
-      if (!hasFetchedStatus.current) await checkStatus({ hydrate: true });
-      if (!cancelled) await fetchModelAliases();
-    };
-    synchronize();
-    return () => { cancelled = true; };
-  }, [isExpanded, checkStatus, fetchModelAliases]);
+    if (isExpanded) {
+      if (!hasFetchedStatus.current) checkStatus({ hydrate: true });
+      fetchModelAliases();
+    }
+  }, [isExpanded]);
 
   const getEffectiveBaseUrl = () => {
     const url = customBaseUrl || (typeof window !== "undefined"

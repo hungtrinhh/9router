@@ -43,13 +43,17 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
   }, [isExpanded]);
 
   // Pre-fill from existing config
+  const hasInitializedModels = useRef(false);
   useEffect(() => {
-    if (status?.savedConfig?.models?.length > 0) {
-      setSelectedModels(status.savedConfig.models);
-    } else if (status?.config && Array.isArray(status.config)) {
-      const entry = status.config.find((e) => e.name === "9Router");
-      if (entry?.models?.length > 0) {
-        setSelectedModels(entry.models.map((m) => m.id));
+    if (status && !hasInitializedModels.current) {
+      hasInitializedModels.current = true;
+      if (status?.savedConfig?.models?.length > 0) {
+        setSelectedModels(status.savedConfig.models);
+      } else if (status?.config && Array.isArray(status.config)) {
+        const entry = status.config.find((e) => e.name === "9Router");
+        if (entry?.models?.length > 0) {
+          setSelectedModels(entry.models.map((m) => m.id));
+        }
       }
     }
   }, [status]);
