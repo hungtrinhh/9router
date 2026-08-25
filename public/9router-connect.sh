@@ -405,41 +405,44 @@ elif tool == "omp":
         subagents_block = "task.agentModelOverrides:\n" + "\n".join(subagent_lines)
 
     models_content = models_path.read_text(encoding="utf-8") if models_path.exists() else ""
-    if not models_content.strip():
-        new_models_content = f"providers:\n{nine_router_block}"
+    trimmed_models = models_content.strip()
+    if not trimmed_models or trimmed_models in ("{}", "null", "providers: {}", "providers:"):
+        new_models_content = f"providers:\n{nine_router_block}\n"
     else:
-        models_content = re.sub(
+        cleaned_models = re.sub(r"(?m)^\s*\{\}\s*$", "", models_content)
+        cleaned_models = re.sub(
             r"(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\Z)",
             "",
-            models_content,
+            cleaned_models,
         )
-        if re.search(r"(?m)^providers:\s*$", models_content):
+        if re.search(r"(?m)^providers:\s*$", cleaned_models):
             new_models_content = re.sub(
                 r"(?m)^providers:\s*$",
                 f"providers:\n{nine_router_block}".rstrip(),
-                models_content,
+                cleaned_models,
                 count=1,
-            )
+            ).strip() + "\n"
         else:
-            new_models_content = f"providers:\n{nine_router_block}\n" + models_content.lstrip()
+            new_models_content = f"providers:\n{nine_router_block}\n"
 
     config_content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-    if not config_content.strip():
+    trimmed_cfg = config_content.strip()
+    if not trimmed_cfg or trimmed_cfg in ("{}", "null"):
         parts = [roles_block]
         if subagents_block:
             parts.append(subagents_block)
         new_config_content = "\n\n".join(parts) + "\n"
     else:
-        config_content = re.sub(r"(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", config_content).strip()
+        cleaned_cfg = re.sub(r"(?m)^\s*\{\}\s*$", "", config_content)
+        cleaned_cfg = re.sub(r"(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", cleaned_cfg).strip()
         if subagents_block:
-            config_content = re.sub(r"(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", config_content).strip()
+            cleaned_cfg = re.sub(r"(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", cleaned_cfg).strip()
         parts = [roles_block]
         if subagents_block:
             parts.append(subagents_block)
-        if config_content:
-            parts.append(config_content)
+        if cleaned_cfg:
+            parts.append(cleaned_cfg)
         new_config_content = "\n\n".join(parts) + "\n"
-
     models_path.write_text(new_models_content.rstrip() + "\n", encoding="utf-8")
     models_path.chmod(stat.S_IRUSR | stat.S_IWUSR)
     config_path.write_text(new_config_content.rstrip() + "\n", encoding="utf-8")

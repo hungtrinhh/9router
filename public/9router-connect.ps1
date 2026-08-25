@@ -334,19 +334,22 @@ $modelsYamlString
   }
 
   $modelsContent = if (Test-Path -LiteralPath $modelsPath) { [IO.File]::ReadAllText($modelsPath) } else { "" }
-  if ([string]::IsNullOrWhiteSpace($modelsContent)) {
+  $trimmedModels = $modelsContent.Trim()
+  if ([string]::IsNullOrWhiteSpace($trimmedModels) -or $trimmedModels -eq "{}" -or $trimmedModels -eq "null" -or $trimmedModels -eq "providers:" -or $trimmedModels -eq "providers: {}") {
     $newModelsContent = "providers:`r`n$nineRouterBlock`r`n"
   } else {
-    $modelsContent = [Regex]::Replace($modelsContent, "(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\z)", "")
-    if ($modelsContent -match "(?m)^providers:\s*$") {
-      $newModelsContent = [Regex]::Replace($modelsContent, "(?m)^providers:\s*$", "providers:`r`n$nineRouterBlock", 1)
+    $cleanedModels = [Regex]::Replace($modelsContent, "(?m)^\s*\{\}\s*$", "")
+    $cleanedModels = [Regex]::Replace($cleanedModels, "(?ms)^\s\s9router:\s*.*?(?=^\s\s[a-zA-Z0-9_-]+:|^[a-zA-Z0-9_-]+:|\z)", "")
+    if ($cleanedModels -match "(?m)^providers:\s*$") {
+      $newModelsContent = [Regex]::Replace($cleanedModels, "(?m)^providers:\s*$", "providers:`r`n$nineRouterBlock", 1).Trim() + "`r`n"
     } else {
-      $newModelsContent = "providers:`r`n$nineRouterBlock`r`n`r`n" + $modelsContent.TrimStart()
+      $newModelsContent = "providers:`r`n$nineRouterBlock`r`n"
     }
   }
 
   $configContent = if (Test-Path -LiteralPath $configPath) { [IO.File]::ReadAllText($configPath) } else { "" }
-  if ([string]::IsNullOrWhiteSpace($configContent)) {
+  $trimmedCfg = $configContent.Trim()
+  if ([string]::IsNullOrWhiteSpace($trimmedCfg) -or $trimmedCfg -eq "{}" -or $trimmedCfg -eq "null") {
     $blocks = New-Object System.Collections.Generic.List[string]
     $blocks.Add($rolesBlock)
     if ($subagentsBlock) {
@@ -354,17 +357,18 @@ $modelsYamlString
     }
     $newConfigContent = ($blocks -join "`r`n`r`n") + "`r`n"
   } else {
-    $configContent = [Regex]::Replace($configContent, "(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
+    $cleanedCfg = [Regex]::Replace($configContent, "(?m)^\s*\{\}\s*$", "")
+    $cleanedCfg = [Regex]::Replace($cleanedCfg, "(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
     if ($subagentsBlock) {
-      $configContent = [Regex]::Replace($configContent, "(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
+      $cleanedCfg = [Regex]::Replace($cleanedCfg, "(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
     }
     $blocks = New-Object System.Collections.Generic.List[string]
     $blocks.Add($rolesBlock)
     if ($subagentsBlock) {
       $blocks.Add($subagentsBlock)
     }
-    if (-not [string]::IsNullOrWhiteSpace($configContent)) {
-      $blocks.Add($configContent)
+    if (-not [string]::IsNullOrWhiteSpace($cleanedCfg)) {
+      $blocks.Add($cleanedCfg)
     }
     $newConfigContent = ($blocks -join "`r`n`r`n") + "`r`n"
   }
