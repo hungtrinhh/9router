@@ -174,7 +174,7 @@ export async function POST(request) {
     await setCliToolConfig("codex", {
       model,
       subagentModel: effectiveSubagentModel,
-      baseUrl: effectiveBaseUrl,
+      baseUrl: normalizedBaseUrl,
       apiKey,
     });
     return NextResponse.json({
