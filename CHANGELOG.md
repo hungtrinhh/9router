@@ -1,3 +1,9 @@
+# v0.5.72 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: fix database `savedConfig` retrieval and frontend hydration across all CLI tool routes (Claude, Cline, Codex, Droid, DeepSeek-TUI, Hermes, Jcode, Kilo, OpenClaw, Grok-Build, OpenCode) when CLI tools are not locally installed on the host or server container
+- **CLI Tools**: remove unnecessary DNS check preventing Antigravity MITM model alias mappings from saving
+
 # v0.5.71 (2026-08-25)
 
 ## Features
