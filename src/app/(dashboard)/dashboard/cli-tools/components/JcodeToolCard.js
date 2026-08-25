@@ -74,7 +74,7 @@ export default function JcodeToolCard({
   };
 
   useEffect(() => {
-    if (jcodeStatus?.installed && !hasInitializedModel.current) {
+    if (jcodeStatus && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
       if (jcodeStatus.savedConfig?.default_model || jcodeStatus.savedConfig?.models?.[0]) {
         setSelectedModel(jcodeStatus.savedConfig.default_model || jcodeStatus.savedConfig.models[0]);

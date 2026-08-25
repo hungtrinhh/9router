@@ -76,7 +76,7 @@ export default function DeepSeekTuiToolCard({
   };
 
   useEffect(() => {
-    if (deepseekStatus?.installed && !hasInitializedModel.current) {
+    if (deepseekStatus && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
       if (deepseekStatus.savedConfig?.model) {
         setSelectedModel(deepseekStatus.savedConfig.model);

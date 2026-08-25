@@ -79,7 +79,7 @@ export default function DroidToolCard({
 
   // Pre-fill model list from existing config (supports multi-model)
   useEffect(() => {
-    if (droidStatus?.installed && !hasInitializedModel.current) {
+    if (droidStatus && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
       if (droidStatus.savedConfig?.models?.length) {
         setModelList(droidStatus.savedConfig.models);

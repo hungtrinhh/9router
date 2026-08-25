@@ -75,7 +75,7 @@ export default function OpenClawToolCard({
   };
 
   useEffect(() => {
-    if (openclawStatus?.installed && !hasInitializedModel.current) {
+    if (openclawStatus && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
       if (openclawStatus.savedConfig?.model) {
         setSelectedModel(openclawStatus.savedConfig.model);

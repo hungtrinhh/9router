@@ -30,7 +30,7 @@ export default function KiloToolCard({ tool, isExpanded, onToggle, baseUrl, apiK
   }, [initialStatus]);
 
   useEffect(() => {
-    if (status?.savedConfig?.model && !selectedModel) {
+    if (status?.savedConfig?.model) {
       setSelectedModel(status.savedConfig.model);
     }
   }, [status]);
