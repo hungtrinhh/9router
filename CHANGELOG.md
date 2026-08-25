@@ -1,4 +1,4 @@
-# v0.5.69 (2026-08-25)
+# v0.5.70 (2026-08-25)
 
 ## Fixes
 - **CLI Tools**: guarantee database persistence on OMP model selections and fix frontend hydration so model choices are preserved across page reloads (F5) even without local CLI detection
