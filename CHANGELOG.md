@@ -1,3 +1,8 @@
+# v0.5.75 (2026-08-25)
+
+## Fixes
+- **Dashboard Guard**: remove `cowork-settings` and `antigravity-mitm` from `LOCAL_ONLY_PATHS` so Cowork and Antigravity alias configurations can be managed in Docker and remote setups
+
 # v0.5.74 (2026-08-25)
 
 ## Fixes
