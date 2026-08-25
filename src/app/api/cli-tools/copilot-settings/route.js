@@ -51,11 +51,11 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       config,
-      has9Router: has9RouterConfig(config),
+      has9Router: has9RouterConfig(config) || Boolean(savedConfig?.baseUrl),
       configPath: getConfigPath(),
       savedConfig,
-      currentModel: entry?.models?.[0]?.id || null,
-      currentUrl: entry?.models?.[0]?.url || null,
+      currentModel: savedConfig?.models?.[0] || entry?.models?.[0]?.id || null,
+      currentUrl: savedConfig?.baseUrl || entry?.models?.[0]?.url || null,
     });
   } catch (error) {
     console.log("Error checking copilot settings:", error);

@@ -76,14 +76,16 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       config,
-      has9Router: has9RouterConfig(config),
+      has9Router: has9RouterConfig(config) || Boolean(savedConfig?.baseUrl),
       savedConfig,
       configPath: getConfigPath(),
-        opencode: {
-          models: Object.keys(modelMap),
-          activeModel: config?.model?.startsWith("9router/") ? config.model.replace(/^9router\//, "") : null,
-          baseURL: providerConfig?.options?.baseURL || null,
-        },
+      opencode: {
+        models: savedConfig?.models?.length ? savedConfig.models : Object.keys(modelMap),
+        activeModel: savedConfig?.activeModel || (config?.model?.startsWith("9router/") ? config.model.replace(/^9router\//, "") : (config?.model || null)),
+        subagentModel: savedConfig?.subagentModel || null,
+        baseURL: savedConfig?.baseUrl || providerConfig?.options?.baseURL || null,
+        apiKey: savedConfig?.apiKey || providerConfig?.options?.apiKey || null,
+      },
     });
   } catch (error) {
     console.log("Error checking opencode settings:", error);

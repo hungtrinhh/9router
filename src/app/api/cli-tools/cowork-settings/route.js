@@ -276,13 +276,14 @@ export async function GET() {
     return NextResponse.json({
       installed: true,
       config,
-      has9Router,
+      has9Router: has9Router || Boolean(savedConfig?.baseUrl),
       configPath,
       savedConfig,
       cowork: {
         appliedId,
-        baseUrl,
-        models,
+        baseUrl: savedConfig?.baseUrl || baseUrl,
+        apiKey: savedConfig?.apiKey || apiKey,
+        models: savedConfig?.models?.length ? savedConfig.models : models,
         provider: config?.inferenceProvider || null,
         plugins: managedMcp.filter((m) => !m.custom && !(stdioNames.has(m.name) && typeof m.url === "string" && m.url.includes("/api/mcp/"))).map((m) => {
           // Strip "{name}-" prefix and dedupe so re-applies don't multiply entries.
