@@ -1,3 +1,9 @@
+# v0.5.71 (2026-08-25)
+
+## Features
+- **CLI Tools**: enable debounced auto-saving on text inputs, model selections, and removals across all CLI tool cards in the dashboard
+- **CLI Tools**: prioritize and hydrate database `savedConfig` across all CLI tool cards (Copilot, Cowork, OpenCode, Cline, Droid, OpenClaw, Jcode, Kilo, etc.) and CLI tool menus so configurations persist seamlessly across restarts and page reloads
+
 # v0.5.70 (2026-08-25)
 
 ## Fixes
