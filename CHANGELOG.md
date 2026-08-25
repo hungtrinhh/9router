@@ -1,3 +1,9 @@
+# v0.5.76 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: add missing `useRef` imports in Antigravity, Cline, Codex, and Kilo tool cards that caused runtime errors on model selection
+- **CLI Tools**: remove redundant and conflicting model save on modal close in Copilot and OpenCode tool cards
+
 # v0.5.75 (2026-08-25)
 
 ## Fixes
