@@ -493,14 +493,14 @@ ${modelEntries}`;
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
-          {checkingOmp && (
+          {checkingOmp && !ompStatus && (
             <div className="flex items-center gap-2 text-text-muted">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
               <span>Checking Oh My Pi (OMP) CLI...</span>
             </div>
           )}
 
-          {!checkingOmp && ompStatus && !ompStatus.installed && (
+          {ompStatus && !ompStatus.installed && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -546,7 +546,7 @@ ${modelEntries}`;
             </div>
           )}
 
-          {!checkingOmp && ompStatus && (
+          {ompStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {/* Info notes */}

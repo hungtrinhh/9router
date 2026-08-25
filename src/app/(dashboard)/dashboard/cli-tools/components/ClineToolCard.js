@@ -199,14 +199,14 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
-          {checking && (
+          {checking && !status && (
             <div className="flex items-center gap-2 text-text-muted">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
               <span>Checking Cline...</span>
             </div>
           )}
 
-          {!checking && status && !status.installed && (
+          {status && !status.installed && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -238,7 +238,7 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
             </div>
           )}
 
-          {!checking && status && (
+          {status && (
             <>
               <div className="flex flex-col gap-2">
                 <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8rem_auto_1fr] sm:items-center sm:gap-2">

@@ -302,9 +302,9 @@ export default function GrokBuildToolCard({
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
-          {checking && <div className="flex items-center gap-2 text-text-muted"><span className="material-symbols-outlined animate-spin">progress_activity</span><span>Checking Grok Build...</span></div>}
+          {checking && !grokStatus && <div className="flex items-center gap-2 text-text-muted"><span className="material-symbols-outlined animate-spin">progress_activity</span><span>Checking Grok Build...</span></div>}
 
-          {!checking && grokStatus && !grokStatus.installed && (
+          {grokStatus && !grokStatus.installed && (
             <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
               <div className="flex items-start gap-3">
                 <span className="material-symbols-outlined text-yellow-500">warning</span>
@@ -317,7 +317,7 @@ export default function GrokBuildToolCard({
             </div>
           )}
 
-          {!checking && grokStatus && (
+          {grokStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {tool.notes?.length > 0 && (

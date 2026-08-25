@@ -83,20 +83,30 @@ export default function BaseUrlSelect({
     [requiresExternalUrl, tunnelEnabled, tunnelPublicUrl, tailscaleEnabled, tailscaleUrl, cloudEnabled, cloudUrl, savedPresets, withV1, browserOrigin]
   );
 
-  // Prefer Cloudflare Tunnel, then Tailscale, then the current dashboard host.
+  // Match current value with options to set mode
   useEffect(() => {
+    if (!options.length) return;
+    if (value) {
+      const match = options.find((o) => o.url === value);
+      if (match) {
+        setMode(match.value);
+        return;
+      }
+      // If value doesn't match predefined options, it's custom
+      setMode(CUSTOM_VALUE);
+      setCustomInput(value);
+      return;
+    }
     if (initializedRef.current) return;
     if (!browserOrigin && !requiresExternalUrl) return;
-    if (options.length === 0) return;
     initializedRef.current = true;
     const first = options.find((o) => o.value !== CUSTOM_VALUE);
     if (first) {
       setMode(first.value);
-      onChange(first.url);
     } else {
       setMode(CUSTOM_VALUE);
     }
-  }, [browserOrigin, options, onChange, requiresExternalUrl]);
+  }, [browserOrigin, options, value, requiresExternalUrl]);
 
   const handleSelect = (e) => {
     const next = e.target.value;

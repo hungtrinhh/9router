@@ -299,14 +299,14 @@ export default function ClaudeToolCard({
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
-          {checkingClaude && (
+          {checkingClaude && !claudeStatus && (
             <div className="flex items-center gap-2 text-text-muted">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
               <span>Checking Claude CLI...</span>
             </div>
           )}
 
-          {!checkingClaude && claudeStatus && !claudeStatus.installed && (
+          {claudeStatus && !claudeStatus.installed && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -343,7 +343,7 @@ export default function ClaudeToolCard({
             </div>
           )}
 
-          {!checkingClaude && claudeStatus && (
+          {claudeStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {/* Endpoint (selector) */}

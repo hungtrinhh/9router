@@ -248,14 +248,14 @@ model = "${effectiveSubagentModel}"
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
-          {checkingCodex && (
+          {checkingCodex && !codexStatus && (
             <div className="flex items-center gap-2 text-text-muted">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
               <span>Checking Codex CLI...</span>
             </div>
           )}
 
-          {!checkingCodex && codexStatus && !codexStatus.installed && (
+          {codexStatus && !codexStatus.installed && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -298,7 +298,7 @@ model = "${effectiveSubagentModel}"
             </div>
           )}
 
-          {!checkingCodex && codexStatus && (
+          {codexStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {/* Endpoint (selector) */}

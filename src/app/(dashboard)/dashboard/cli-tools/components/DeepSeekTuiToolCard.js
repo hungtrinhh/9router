@@ -226,14 +226,14 @@ model = "${selectedModel || "provider/model-id"}"
 
       {isExpanded && (
         <div className="mt-4 pt-4 border-t border-border flex flex-col gap-4">
-          {checking && (
+          {checking && !deepseekStatus && (
             <div className="flex items-center gap-2 text-text-muted">
               <span className="material-symbols-outlined animate-spin">progress_activity</span>
               <span>Checking DeepSeek TUI...</span>
             </div>
           )}
 
-          {!checking && deepseekStatus && !deepseekStatus.installed && (
+          {deepseekStatus && !deepseekStatus.installed && (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-3 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                 <div className="flex items-start gap-3">
@@ -255,7 +255,7 @@ model = "${selectedModel || "provider/model-id"}"
             </div>
           )}
 
-          {!checking && deepseekStatus && (
+          {deepseekStatus && (
             <>
               <div className="flex flex-col gap-2">
                 {tool.notes && tool.notes.length > 0 && (
