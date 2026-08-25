@@ -81,21 +81,22 @@ export default function DroidToolCard({
   useEffect(() => {
     if (droidStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      const existingModels = (droidStatus.settings?.customModels || [])
-        .filter(m => m.id?.startsWith("custom:9Router"))
-        .sort((a, b) => (a.index || 0) - (b.index || 0))
-        .map(m => m.model);
-      if (existingModels.length > 0) {
-        setModelList(existingModels);
+      if (droidStatus.savedConfig?.models?.length) {
+        setModelList(droidStatus.savedConfig.models);
+      } else if (droidStatus.savedConfig?.model) {
+        setModelList([droidStatus.savedConfig.model]);
       } else {
-        // Legacy or savedConfig fallback
-        const legacy = droidStatus.settings?.customModels?.find(m => m.id === "custom:9Router-0");
-        if (legacy?.model) {
-          setModelList([legacy.model]);
-        } else if (droidStatus.savedConfig?.models?.length) {
-          setModelList(droidStatus.savedConfig.models);
-        } else if (droidStatus.savedConfig?.model) {
-          setModelList([droidStatus.savedConfig.model]);
+        const existingModels = (droidStatus.settings?.customModels || [])
+          .filter(m => m.id?.startsWith("custom:9Router"))
+          .sort((a, b) => (a.index || 0) - (b.index || 0))
+          .map(m => m.model);
+        if (existingModels.length > 0) {
+          setModelList(existingModels);
+        } else {
+          const legacy = droidStatus.settings?.customModels?.find(m => m.id === "custom:9Router-0");
+          if (legacy?.model) {
+            setModelList([legacy.model]);
+          }
         }
       }
     }
@@ -124,26 +125,21 @@ export default function DroidToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const addModel = () => {
-    const val = modelInput.trim();
-    if (!val || modelList.includes(val)) return;
-    setModelList((prev) => [...prev, val]);
-    setModelInput("");
-  };
+  const handleApplySettings = async (overrides = {}) => {
+    const currentModels = "models" in overrides ? overrides.models : modelList;
+    const currentActiveModel = "activeModel" in overrides ? overrides.activeModel : (currentModels[0] || "");
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
 
-  const removeModel = (id) => setModelList((prev) => prev.filter((m) => m !== id));
+    const url = currentCustomBaseUrl || baseUrl;
+    const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
 
-  const handleModelSelect = (model) => {
-    if (!model.value || modelList.includes(model.value)) return;
-    setModelList((prev) => [...prev, model.value]);
-    setModalOpen(false);
-  };
+    if (currentModels.length === 0) return;
 
-  const handleApplySettings = async () => {
     setApplying(true);
     setMessage(null);
     try {
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
 
@@ -151,10 +147,10 @@ export default function DroidToolCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
-          models: modelList,
-          activeModel: modelList[0] || "",
+          models: currentModels,
+          activeModel: currentActiveModel,
         }),
       });
       const data = await res.json();
@@ -169,6 +165,29 @@ export default function DroidToolCard({
     } finally {
       setApplying(false);
     }
+  };
+
+  const addModel = () => {
+    const val = modelInput.trim();
+    if (!val || modelList.includes(val)) return;
+    const next = [...modelList, val];
+    setModelList(next);
+    setModelInput("");
+    handleApplySettings({ models: next, activeModel: next[0] });
+  };
+
+  const removeModel = (id) => {
+    const next = modelList.filter((m) => m !== id);
+    setModelList(next);
+    handleApplySettings({ models: next, activeModel: next[0] });
+  };
+
+  const handleModelSelect = (model) => {
+    if (!model.value || modelList.includes(model.value)) return;
+    const next = [...modelList, model.value];
+    setModelList(next);
+    setModalOpen(false);
+    handleApplySettings({ models: next, activeModel: next[0] });
   };
 
   const handleResetSettings = async () => {

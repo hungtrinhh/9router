@@ -37,10 +37,10 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
   }, [isExpanded]);
 
   useEffect(() => {
-    if (status?.settings?.openAiModelId) {
-      setSelectedModel(status.settings.openAiModelId);
-    } else if (status?.savedConfig?.model) {
+    if (status?.savedConfig?.model) {
       setSelectedModel(status.savedConfig.model);
+    } else if (status?.settings?.openAiModelId) {
+      setSelectedModel(status.settings.openAiModelId);
     }
   }, [status]);
 
@@ -83,18 +83,29 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
     }
   };
 
-  const handleApply = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApply = async (overrides = {}) => {
+    const currentModel = "model" in overrides ? overrides.model : selectedModel;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    const url = currentCustomBaseUrl || baseUrl;
+    const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
+
+    if (!currentModel) return;
+
     setApplying(true);
     setMessage(null);
     try {
-      const keyToUse = (selectedApiKey && selectedApiKey.trim())
-        ? selectedApiKey
-        : (!cloudEnabled ? "sk_9router" : selectedApiKey);
+      const keyToUse = (currentApiKey && currentApiKey.trim())
+        ? currentApiKey
+        : (!cloudEnabled ? "sk_9router" : currentApiKey);
 
       const res = await fetch("/api/cli-tools/cline-settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ baseUrl: getEffectiveBaseUrl(), apiKey: keyToUse, model: selectedModel }),
+        body: JSON.stringify({ baseUrl: effectiveBaseUrl, apiKey: keyToUse, model: currentModel }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -108,6 +119,13 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApply(overrides);
+    }, 600);
   };
 
   const handleReset = async () => {
@@ -253,8 +271,8 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Model</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <div className="relative w-full min-w-0">
-                    <input type="text" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                    {selectedModel && <button onClick={() => setSelectedModel("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                    <input type="text" value={selectedModel} onChange={(e) => { setSelectedModel(e.target.value); debouncedSave({ model: e.target.value }); }} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
+                    {selectedModel && <button onClick={() => { setSelectedModel(""); handleApply({ model: "" }); }} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
                   </div>
                   <button onClick={() => setModalOpen(true)} disabled={!activeProviders?.length} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${activeProviders?.length ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select Model</button>
                 </div>
@@ -287,7 +305,7 @@ export default function ClineToolCard({ tool, isExpanded, onToggle, baseUrl, api
         <ModelSelectModal
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
-          onSelect={(model) => { setSelectedModel(model.value); setModalOpen(false); }}
+          onSelect={(model) => { setSelectedModel(model.value); setModalOpen(false); handleApply({ model: model.value }); }}
           selectedModel={selectedModel}
           activeProviders={activeProviders}
           modelAliases={modelAliases}

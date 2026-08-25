@@ -78,11 +78,10 @@ export default function HermesToolCard({
   useEffect(() => {
     if (hermesStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      const cfg = hermesStatus.settings?.model;
-      if (cfg?.default) {
-        setSelectedModel(cfg.default);
-      } else if (hermesStatus.savedConfig?.model) {
+      if (hermesStatus.savedConfig?.model) {
         setSelectedModel(hermesStatus.savedConfig.model);
+      } else if (cfg?.default) {
+        setSelectedModel(cfg.default);
       }
     }
   }, [hermesStatus]);

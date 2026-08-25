@@ -76,10 +76,10 @@ export default function CoworkToolCard({
   }, [isExpanded]);
 
   useEffect(() => {
-    if (status?.cowork?.models?.length) {
-      setSelectedModels(status.cowork.models);
-    } else if (status?.savedConfig?.models?.length) {
+    if (status?.savedConfig?.models?.length) {
       setSelectedModels(status.savedConfig.models);
+    } else if (status?.cowork?.models?.length) {
+      setSelectedModels(status.cowork.models);
     }
     if (status?.cowork?.baseUrl && !customBaseUrl) {
       setCustomBaseUrl(stripV1(status.cowork.baseUrl));
@@ -122,18 +122,25 @@ export default function CoworkToolCard({
 
   const configStatus = getConfigStatus();
 
-  const handleApply = async () => {
+  const handleApply = async (overrides = {}) => {
     setMessage(null);
-    const effectiveUrl = getEffectiveBaseUrl();
+    const currentModels = "models" in overrides ? overrides.models : selectedModels;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentPlugins = "plugins" in overrides ? overrides.plugins : plugins;
+    const currentLocalPlugins = "localPlugins" in overrides ? overrides.localPlugins : localPlugins;
+    const currentCustomPlugins = "customPlugins" in overrides ? overrides.customPlugins : customPlugins;
 
-    if (selectedModels.length === 0) {
-      setMessage({ type: "error", text: "Please select at least one model" });
+    const url = currentCustomBaseUrl || baseUrl;
+    const effectiveUrl = url.endsWith("/v1") ? url : `${url}/v1`;
+
+    if (currentModels.length === 0) {
       return;
     }
 
     setApplying(true);
     try {
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
 
@@ -143,10 +150,10 @@ export default function CoworkToolCard({
         body: JSON.stringify({
           baseUrl: effectiveUrl,
           apiKey: keyToUse,
-          models: selectedModels,
-          plugins,
-          localPlugins,
-          customPlugins,
+          models: currentModels,
+          plugins: currentPlugins,
+          localPlugins: currentLocalPlugins,
+          customPlugins: currentCustomPlugins,
         }),
       });
       const data = await res.json();
@@ -176,7 +183,9 @@ export default function CoworkToolCard({
         return;
       }
       if (!selectedModels.includes(name)) {
-        setSelectedModels([...selectedModels, name]);
+        const next = [...selectedModels, name];
+        setSelectedModels(next);
+        handleApply({ models: next });
       }
       setComboModalOpen(false);
       setMessage({ type: "success", text: `Combo "${name}" created and added.` });
@@ -188,12 +197,16 @@ export default function CoworkToolCard({
   const handleAddModel = (model) => {
     const value = model?.value || model?.name || model;
     if (!value || selectedModels.includes(value)) return;
-    setSelectedModels((prev) => [...prev, value]);
+    const next = [...selectedModels, value];
+    setSelectedModels(next);
+    handleApply({ models: next });
   };
 
   const handleRemoveModel = (model) => {
     const value = model?.value || model?.name || model;
-    setSelectedModels((prev) => prev.filter((item) => item !== value));
+    const next = selectedModels.filter((item) => item !== value);
+    setSelectedModels(next);
+    handleApply({ models: next });
   };
 
   const handleReset = async () => {

@@ -76,10 +76,10 @@ export default function JcodeToolCard({
   useEffect(() => {
     if (jcodeStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      if (provider?.default_model) {
-        setSelectedModel(provider.default_model);
-      } else if (jcodeStatus.savedConfig?.default_model || jcodeStatus.savedConfig?.models?.[0]) {
+      if (jcodeStatus.savedConfig?.default_model || jcodeStatus.savedConfig?.models?.[0]) {
         setSelectedModel(jcodeStatus.savedConfig.default_model || jcodeStatus.savedConfig.models[0]);
+      } else if (provider?.default_model) {
+        setSelectedModel(provider.default_model);
       }
       if (provider) {
         // Try to match API key from env file
@@ -123,11 +123,22 @@ export default function JcodeToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const handleApplySettings = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApplySettings = async (overrides = {}) => {
+    const currentModel = "model" in overrides ? overrides.model : selectedModel;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    const url = currentCustomBaseUrl || getLocalBaseUrl();
+    const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
+
+    if (!currentModel) return;
+
     setApplying(true);
     setMessage(null);
     try {
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
 
@@ -135,9 +146,9 @@ export default function JcodeToolCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
-          models: selectedModel ? [selectedModel] : [],
+          models: currentModel ? [currentModel] : [],
         }),
       });
       const data = await res.json();
@@ -152,6 +163,13 @@ export default function JcodeToolCard({
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApplySettings(overrides);
+    }, 600);
   };
 
   const handleResetSettings = async () => {
@@ -178,6 +196,7 @@ export default function JcodeToolCard({
   const handleModelSelect = (model) => {
     setSelectedModel(model.value);
     setModalOpen(false);
+    handleApplySettings({ model: model.value });
   };
 
   const getManualConfigs = () => {
@@ -323,8 +342,8 @@ id = "${selectedModel || "cc/claude-opus-4-7"}"`;
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Default Model</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <div className="relative w-full min-w-0">
-                    <input type="text" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="cc/claude-opus-4-7" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                    {selectedModel && <button onClick={() => setSelectedModel("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                    <input type="text" value={selectedModel} onChange={(e) => { setSelectedModel(e.target.value); debouncedSave({ model: e.target.value }); }} placeholder="cc/claude-opus-4-7" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
+                    {selectedModel && <button onClick={() => { setSelectedModel(""); handleApplySettings({ model: "" }); }} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
                   </div>
                   <button onClick={() => setModalOpen(true)} disabled={!hasActiveProviders} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${hasActiveProviders ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select</button>
                 </div>

@@ -77,15 +77,14 @@ export default function OpenClawToolCard({
   useEffect(() => {
     if (openclawStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      if (provider) {
+      if (openclawStatus.savedConfig?.model) {
+        setSelectedModel(openclawStatus.savedConfig.model);
+      } else if (provider) {
         const primaryModel = openclawStatus.settings?.agents?.defaults?.model?.primary;
         if (primaryModel) setSelectedModel(primaryModel.replace("9router/", ""));
-        else if (openclawStatus.savedConfig?.model) setSelectedModel(openclawStatus.savedConfig.model);
-        if (provider.apiKey && apiKeys?.some(k => k.key === provider.apiKey)) {
-          setSelectedApiKey(provider.apiKey);
-        }
-      } else if (openclawStatus.savedConfig?.model) {
-        setSelectedModel(openclawStatus.savedConfig.model);
+      }
+      if (provider?.apiKey && apiKeys?.some(k => k.key === provider.apiKey)) {
+        setSelectedApiKey(provider.apiKey);
       }
       // Init per-agent models from enriched agents list
       const agentList = openclawStatus.agents || [];
@@ -132,11 +131,23 @@ export default function OpenClawToolCard({
     return url.endsWith("/v1") ? url : `${url}/v1`;
   };
 
-  const handleApplySettings = async () => {
+  const debounceTimerRef = useRef(null);
+
+  const handleApplySettings = async (overrides = {}) => {
+    const currentModel = "model" in overrides ? overrides.model : selectedModel;
+    const currentAgentModels = "agentModels" in overrides ? overrides.agentModels : agentModels;
+    const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
+    const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
+
+    const url = currentCustomBaseUrl || getLocalBaseUrl();
+    const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
+
+    if (!currentModel) return;
+
     setApplying(true);
     setMessage(null);
     try {
-      const keyToUse = selectedApiKey?.trim()
+      const keyToUse = currentApiKey?.trim()
         || (apiKeys?.length > 0 ? apiKeys[0].key : null)
         || (!cloudEnabled ? "sk_9router" : null);
 
@@ -144,10 +155,10 @@ export default function OpenClawToolCard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          baseUrl: getEffectiveBaseUrl(),
+          baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
-          model: selectedModel,
-          agentModels,
+          model: currentModel,
+          agentModels: currentAgentModels,
         }),
       });
       const data = await res.json();
@@ -162,6 +173,13 @@ export default function OpenClawToolCard({
     } finally {
       setApplying(false);
     }
+  };
+
+  const debouncedSave = (overrides) => {
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleApplySettings(overrides);
+    }, 600);
   };
 
   const handleResetSettings = async () => {
@@ -187,10 +205,13 @@ export default function OpenClawToolCard({
 
   const handleModelSelect = (model) => {
     if (agentModalFor) {
-      setAgentModels(prev => ({ ...prev, [agentModalFor]: model.value }));
+      const nextAgents = { ...agentModels, [agentModalFor]: model.value };
+      setAgentModels(nextAgents);
       setAgentModalFor(null);
+      handleApplySettings({ agentModels: nextAgents });
     } else {
       setSelectedModel(model.value);
+      handleApplySettings({ model: model.value });
     }
     setModalOpen(false);
   };
@@ -323,8 +344,8 @@ export default function OpenClawToolCard({
                   <span className="text-xs font-semibold text-text-main sm:text-right sm:text-sm">Default Model</span>
                   <span className="material-symbols-outlined hidden text-text-muted text-[14px] sm:inline">arrow_forward</span>
                   <div className="relative w-full min-w-0">
-                    <input type="text" value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
-                    {selectedModel && <button onClick={() => setSelectedModel("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                    <input type="text" value={selectedModel} onChange={(e) => { setSelectedModel(e.target.value); debouncedSave({ model: e.target.value }); }} placeholder="provider/model-id" className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5" />
+                    {selectedModel && <button onClick={() => { setSelectedModel(""); handleApplySettings({ model: "" }); }} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
                   </div>
                   <button onClick={() => { setAgentModalFor(null); setModalOpen(true); }} disabled={!hasActiveProviders} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${hasActiveProviders ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select</button>
                 </div>
@@ -338,11 +359,15 @@ export default function OpenClawToolCard({
                       <input
                         type="text"
                         value={agentModels[agent.id] || ""}
-                        onChange={(e) => setAgentModels(prev => ({ ...prev, [agent.id]: e.target.value }))}
+                        onChange={(e) => {
+                          const nextAgents = { ...agentModels, [agent.id]: e.target.value };
+                          setAgentModels(nextAgents);
+                          debouncedSave({ agentModels: nextAgents });
+                        }}
                         placeholder={`default (${selectedModel || "provider/model-id"})`}
                         className="w-full min-w-0 pl-2 pr-7 py-2 bg-surface rounded border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 sm:py-1.5"
                       />
-                      {agentModels[agent.id] && <button onClick={() => setAgentModels(prev => ({ ...prev, [agent.id]: "" }))} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
+                      {agentModels[agent.id] && <button onClick={() => { const nextAgents = { ...agentModels, [agent.id]: "" }; setAgentModels(nextAgents); handleApplySettings({ agentModels: nextAgents }); }} className="absolute right-1 top-1/2 -translate-y-1/2 p-0.5 text-text-muted hover:text-red-500 rounded transition-colors" title="Clear"><span className="material-symbols-outlined text-[14px]">close</span></button>}
                     </div>
                     <button onClick={() => { setAgentModalFor(agent.id); setModalOpen(true); }} disabled={!hasActiveProviders} className={`w-full sm:w-auto rounded border px-2 py-2 text-xs transition-colors sm:py-1.5 whitespace-nowrap sm:shrink-0 ${hasActiveProviders ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer" : "opacity-50 cursor-not-allowed border-border"}`}>Select</button>
                   </div>

@@ -44,15 +44,13 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
 
   // Pre-fill from existing config
   useEffect(() => {
-    if (status?.config && Array.isArray(status.config) && selectedModels.length === 0) {
+    if (status?.savedConfig?.models?.length > 0 && selectedModels.length === 0) {
+      setSelectedModels(status.savedConfig.models);
+    } else if (status?.config && Array.isArray(status.config) && selectedModels.length === 0) {
       const entry = status.config.find((e) => e.name === "9Router");
       if (entry?.models?.length > 0) {
         setSelectedModels(entry.models.map((m) => m.id));
-      } else if (status?.savedConfig?.models?.length > 0) {
-        setSelectedModels(status.savedConfig.models);
       }
-    } else if (status?.savedConfig?.models?.length > 0 && selectedModels.length === 0) {
-      setSelectedModels(status.savedConfig.models);
     }
   }, [status]);
 
@@ -97,7 +95,11 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
 
   const getDisplayUrl = () => customBaseUrl || `${baseUrl}/v1`;
 
-  const removeModel = (id) => setSelectedModels((prev) => prev.filter((m) => m !== id));
+  const removeModel = (id) => {
+    const next = selectedModels.filter((m) => m !== id);
+    setSelectedModels(next);
+    saveModels(next);
+  };
 
   const checkStatus = async () => {
     setChecking(true);
@@ -302,11 +304,15 @@ export default function CopilotToolCard({ tool, isExpanded, onToggle, baseUrl, a
           }}
           onSelect={(model) => {
             if (!selectedModels.includes(model.value)) {
-              setSelectedModels([...selectedModels, model.value]);
+              const next = [...selectedModels, model.value];
+              setSelectedModels(next);
+              saveModels(next);
             }
           }}
           onDeselect={(model) => {
-            setSelectedModels(selectedModels.filter(m => m !== model.value));
+            const next = selectedModels.filter(m => m !== model.value);
+            setSelectedModels(next);
+            saveModels(next);
           }}
           selectedModel={null}
           activeProviders={activeProviders}

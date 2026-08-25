@@ -78,11 +78,10 @@ export default function DeepSeekTuiToolCard({
   useEffect(() => {
     if (deepseekStatus?.installed && !hasInitializedModel.current) {
       hasInitializedModel.current = true;
-      const openaiSection = deepseekStatus.settings?.["providers.openai"];
-      if (openaiSection?.model) {
-        setSelectedModel(openaiSection.model);
-      } else if (deepseekStatus.savedConfig?.model) {
+      if (deepseekStatus.savedConfig?.model) {
         setSelectedModel(deepseekStatus.savedConfig.model);
+      } else if (openaiSection?.model) {
+        setSelectedModel(openaiSection.model);
       }
     }
   }, [deepseekStatus]);

@@ -26,7 +26,7 @@ export default function AntigravityToolCard({
   const [modalOpen, setModalOpen] = useState(false);
   const [currentEditingAlias, setCurrentEditingAlias] = useState(null);
   const [modelAliases, setModelAliases] = useState({});
-
+  const debounceTimerRef = useRef(null);
   useEffect(() => {
     if (apiKeys?.length > 0 && !selectedApiKey) {
       setSelectedApiKey(apiKeys[0].key);
@@ -183,44 +183,45 @@ export default function AntigravityToolCard({
     setModalOpen(true);
   };
 
-  const handleModelSelect = (model) => {
-    if (currentEditingAlias) {
-      setModelMappings(prev => ({
-        ...prev,
-        [currentEditingAlias]: model.value,
-      }));
-    }
-  };
-
-  const handleModelMappingChange = (alias, value) => {
-    setModelMappings(prev => ({
-      ...prev,
-      [alias]: value,
-    }));
-  };
-
-  const handleSaveMappings = async () => {
-    setLoading(true);
+  const handleSaveMappings = async (mappingsToSave = modelMappings) => {
     setMessage(null);
-
     try {
       const res = await fetch("/api/cli-tools/antigravity-mitm/alias", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tool: "antigravity", mappings: modelMappings }),
+        body: JSON.stringify({ tool: "antigravity", mappings: mappingsToSave }),
       });
-
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to save mappings");
       }
-
       setMessage({ type: "success", text: "Mappings saved!" });
     } catch (error) {
       setMessage({ type: "error", text: error.message });
-    } finally {
-      setLoading(false);
     }
+  };
+
+  const handleModelSelect = (model) => {
+    if (currentEditingAlias) {
+      const updated = {
+        ...modelMappings,
+        [currentEditingAlias]: model.value,
+      };
+      setModelMappings(updated);
+      handleSaveMappings(updated);
+    }
+  };
+
+  const handleModelMappingChange = (alias, value) => {
+    const updated = {
+      ...modelMappings,
+      [alias]: value,
+    };
+    setModelMappings(updated);
+    clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      handleSaveMappings(updated);
+    }, 600);
   };
 
   const isRunning = status?.running;
