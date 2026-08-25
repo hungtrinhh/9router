@@ -1,3 +1,8 @@
+# v0.5.73 (2026-08-25)
+
+## Fixes
+- **Dashboard Guard**: remove obsolete local-only restriction blocking CLI tool settings mutations (`POST`/`PATCH`/`DELETE`) when running in Docker or accessed via remote host/tunnel
+
 # v0.5.72 (2026-08-25)
 
 ## Fixes
