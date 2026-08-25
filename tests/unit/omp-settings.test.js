@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { parseYAML, stringifyYAML } from "confbox";
 import { CLI_TOOLS } from "../../src/shared/constants/cliTools.js";
 import { detectClientTool } from "../../open-sse/utils/clientDetector.js";
-
 describe("Oh My Pi (OMP) CLI Tool", () => {
   it("defines omp in CLI_TOOLS constants", () => {
     const omp = CLI_TOOLS.omp;
@@ -111,4 +110,5 @@ describe("Oh My Pi (OMP) CLI Tool", () => {
     expect(parsed.providers["9router"].models).toHaveLength(4);
     expect(parsed.providers["9router"].models.map((m) => m.id)).toEqual(modelIds);
   });
+
 });

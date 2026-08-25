@@ -23,7 +23,7 @@ export default defineConfig({
     alias: [
       { find: /^open-sse\//, replacement: resolve(__dirname, "../open-sse") + "/" },
       { find: "open-sse", replacement: resolve(__dirname, "../open-sse") },
-      { find: /^@\//, replacement: resolve(__dirname, "../src") + "/" },
+      { find: "@", replacement: resolve(__dirname, "../src") },
     ],
   },
 });

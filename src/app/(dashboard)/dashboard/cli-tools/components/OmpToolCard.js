@@ -141,16 +141,26 @@ export default function OmpToolCard({
   const hydrateForm = useCallback(
     (status) => {
       const active = status?.omp?.activeModel || status?.omp?.models?.[0] || status?.savedConfig?.activeModel || status?.savedConfig?.model || "";
-      setSelectedModel(active);
-      setSmolModel(status?.omp?.smolModel || status?.savedConfig?.smolModel || "");
-      setSlowModel(status?.omp?.slowModel || status?.savedConfig?.slowModel || "");
-      setPlanModel(status?.omp?.planModel || status?.savedConfig?.planModel || "");
-      setSubagentModels(status?.omp?.subagentModels || status?.savedConfig?.subagentModels || {});
-      if (status?.omp?.apiKey && apiKeys?.some((k) => k.key === status.omp.apiKey)) {
+      if (active) setSelectedModel(active);
+      if (status?.omp?.smolModel !== undefined || status?.savedConfig?.smolModel !== undefined) {
+        setSmolModel(status?.omp?.smolModel || status?.savedConfig?.smolModel || "");
+      }
+      if (status?.omp?.slowModel !== undefined || status?.savedConfig?.slowModel !== undefined) {
+        setSlowModel(status?.omp?.slowModel || status?.savedConfig?.slowModel || "");
+      }
+      if (status?.omp?.planModel !== undefined || status?.savedConfig?.planModel !== undefined) {
+        setPlanModel(status?.omp?.planModel || status?.savedConfig?.planModel || "");
+      }
+      if (status?.omp?.subagentModels || status?.savedConfig?.subagentModels) {
+        setSubagentModels(status?.omp?.subagentModels || status?.savedConfig?.subagentModels || {});
+      }
+      if (status?.omp?.apiKey) {
         setSelectedApiKey(status.omp.apiKey);
+      } else if (apiKeys?.length > 0 && !selectedApiKey) {
+        setSelectedApiKey(apiKeys[0].key);
       }
     },
-    [apiKeys]
+    [apiKeys, selectedApiKey]
   );
 
   const fetchModelAliases = useCallback(async () => {
@@ -224,7 +234,28 @@ export default function OmpToolCard({
     const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
     const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
 
-    if (!currentSelectedModel?.trim()) {
+    const mappedSubagents = {};
+    if (currentSubagentModels && typeof currentSubagentModels === "object") {
+      for (const type of OMP_SUBAGENT_TYPES) {
+        const m = currentSubagentModels[type.id]?.trim();
+        if (m) mappedSubagents[type.id] = m;
+      }
+    }
+
+    const effectivePrimaryModel = currentSelectedModel?.trim() || currentSmolModel?.trim() || currentSlowModel?.trim() || Object.values(mappedSubagents)[0] || "";
+
+    // Collect all distinct models selected across roles & subagents
+    const allModels = Array.from(
+      new Set([
+        effectivePrimaryModel,
+        currentSmolModel?.trim(),
+        currentSlowModel?.trim(),
+        currentPlanModel?.trim(),
+        ...Object.values(mappedSubagents),
+      ].filter(Boolean))
+    );
+
+    if (allModels.length === 0) {
       return;
     }
 
@@ -234,24 +265,8 @@ export default function OmpToolCard({
       const keyToUse =
         currentApiKey?.trim() ||
         (apiKeys?.length > 0 ? apiKeys[0].key : null) ||
-        (!cloudEnabled ? "sk_9router" : null);
-
-      const mappedSubagents = {};
-      for (const type of OMP_SUBAGENT_TYPES) {
-        const m = currentSubagentModels[type.id]?.trim();
-        if (m) mappedSubagents[type.id] = m;
-      }
-
-      // Collect all distinct models selected across roles & subagents
-      const allModels = Array.from(
-        new Set([
-          currentSelectedModel,
-          currentSmolModel,
-          currentSlowModel,
-          currentPlanModel,
-          ...Object.values(mappedSubagents),
-        ].filter(Boolean))
-      );
+        (!cloudEnabled ? "sk_9router" : null) ||
+        "sk_9router";
 
       const url = currentCustomBaseUrl || getLocalBaseUrl();
       const effectiveBaseUrl = url.endsWith("/v1") ? url : `${url}/v1`;
@@ -263,7 +278,7 @@ export default function OmpToolCard({
           baseUrl: effectiveBaseUrl,
           apiKey: keyToUse,
           models: allModels,
-          activeModel: currentSelectedModel,
+          activeModel: effectivePrimaryModel,
           smolModel: currentSmolModel || undefined,
           slowModel: currentSlowModel || undefined,
           planModel: currentPlanModel || undefined,

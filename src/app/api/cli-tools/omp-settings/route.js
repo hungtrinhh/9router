@@ -100,18 +100,6 @@ export async function GET() {
     const hasPersisted =
       savedConfig && typeof savedConfig === "object" && Object.keys(savedConfig).length > 0;
 
-    // The persisted DB snapshot is the durable source of truth (it lives on the
-    // mounted data volume); the ~/.omp yaml files are only valid for a local CLI
-    // install and are lost on container recreate. Only show the install prompt
-    // when there is neither a local CLI nor a persisted snapshot.
-    if (!isInstalled && !hasPersisted) {
-      return NextResponse.json({
-        installed: false,
-        settings: null,
-        message: "Oh My Pi (OMP) is not installed",
-      });
-    }
-
     const modelsData = isInstalled ? await readModelsYaml() : {};
     const configData = isInstalled ? await readConfigYaml() : {};
     const providerConfig = modelsData?.providers?.["9router"];
@@ -149,14 +137,13 @@ export async function GET() {
         ? Object.values(savedConfig.subagentModels).some((v) => typeof v === "string" && v.trim())
         : false;
 
-    // Persisted DB config is the source of truth so settings survive container
-    // restarts (the ~/.omp yaml files live outside any mounted volume). Fall back
-    // to the yaml files only for fields that were never persisted.
+    // Persisted DB config is the primary source of truth so settings survive
+    // restarts and work across local/remote environments.
     const omp = {
       models: Array.isArray(savedConfig?.models) && savedConfig.models.length > 0
         ? savedConfig.models
         : modelIds,
-      activeModel: savedConfig?.activeModel || savedConfig?.model || yamlActiveModel,
+      activeModel: savedConfig?.activeModel || savedConfig?.model || yamlActiveModel || "",
       smolModel: savedConfig?.smolModel || yamlRole("smol") || "",
       slowModel: savedConfig?.slowModel || yamlRole("slow") || "",
       planModel: savedConfig?.planModel || yamlRole("plan") || "",
@@ -166,7 +153,7 @@ export async function GET() {
     };
 
     return NextResponse.json({
-      installed: true,
+      installed: isInstalled || hasPersisted,
       settings: {
         models: modelsData,
         config: configData,
@@ -225,112 +212,119 @@ export async function POST(request) {
       );
     }
 
-    const ompDir = getOmpDir();
-    await fs.mkdir(ompDir, { recursive: true });
-
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
     const keyToUse = apiKey || "sk_9router";
-
-    // Build model definitions for models.yml
-    const modelItems = modelsArray.map((modelId) => {
-      const slash = modelId.indexOf("/");
-      const provider = slash > 0 ? modelId.slice(0, slash) : null;
-      const cleanId = slash > 0 ? modelId.slice(slash + 1) : modelId;
-      const caps = getCapabilitiesForModel(provider, cleanId);
-
-      return {
-        id: modelId,
-        name: cleanId || modelId,
-        contextWindow: caps.contextWindow || 200000,
-        maxTokens: Math.min(caps.maxOutput || 8192, 32768),
-        reasoning: Boolean(caps.reasoning),
-        input: caps.vision ? ["text", "image"] : ["text"],
-      };
-    });
-
-    // Update models.yml
-    const modelsData = await readModelsYaml();
-    if (!modelsData.providers) modelsData.providers = {};
-    modelsData.providers["9router"] = {
-      baseUrl: normalizedBaseUrl,
-      apiKey: keyToUse,
-      api: "openai-completions",
-      models: modelItems,
-    };
-    await fs.writeFile(getModelsPath(), stringifyYAML(modelsData), "utf-8");
-
-    // Update config.yml
-    const configData = await readConfigYaml();
-    if (!configData.modelRoles) configData.modelRoles = {};
 
     const primaryModel = activeModel && modelsArray.includes(activeModel)
       ? activeModel
       : modelsArray[0];
 
-    configData.modelRoles.default = `9router/${primaryModel}`;
-
-    if (smolModel && modelsArray.includes(smolModel)) {
-      configData.modelRoles.smol = `9router/${smolModel}`;
-    } else if (configData.modelRoles.smol?.startsWith("9router/")) {
-      delete configData.modelRoles.smol;
-    }
-
-    if (slowModel && modelsArray.includes(slowModel)) {
-      configData.modelRoles.slow = `9router/${slowModel}`;
-    } else if (configData.modelRoles.slow?.startsWith("9router/")) {
-      delete configData.modelRoles.slow;
-    }
-
-    if (planModel && modelsArray.includes(planModel)) {
-      configData.modelRoles.plan = `9router/${planModel}`;
-    } else if (configData.modelRoles.plan?.startsWith("9router/")) {
-      delete configData.modelRoles.plan;
-    }
-
-    // Merge with any previously persisted subagent overrides so clearing one
-    // field in the form does not wipe the others when the frontend sends only
-    // the fields currently being edited.
+    // Merge subagent overrides
     const savedConfig = await getCliToolConfig("omp");
     const mergedSubagentModels = { ...(savedConfig?.subagentModels || {}) };
     if (subagentModels && typeof subagentModels === "object") {
-      if (!configData["task.agentModelOverrides"]) {
-        configData["task.agentModelOverrides"] = {};
-      }
       for (const [agentName, agentModel] of Object.entries(subagentModels)) {
         const trimmed = typeof agentModel === "string" ? agentModel.trim() : "";
         if (trimmed) {
-          configData["task.agentModelOverrides"][agentName] = trimmed.startsWith("9router/")
-            ? trimmed
-            : `9router/${trimmed}`;
           mergedSubagentModels[agentName] = trimmed;
         } else {
           delete mergedSubagentModels[agentName];
-          if (configData["task.agentModelOverrides"][agentName]?.startsWith("9router/")) {
-            delete configData["task.agentModelOverrides"][agentName];
-          }
         }
-      }
-      if (Object.keys(configData["task.agentModelOverrides"]).length === 0) {
-        delete configData["task.agentModelOverrides"];
       }
     }
 
-    await fs.writeFile(getConfigPath(), stringifyYAML(configData), "utf-8");
-
-    // Save model settings to database for cross-machine sync. baseUrl/apiKey are
-    // persisted too so the dashboard restores the full form after a container
-    // restart (the ~/.omp yaml files are not part of any mounted volume).
+    // 1. GUARANTEED: Save model settings to database for persistence and cross-machine sync
     await setCliToolConfig("omp", {
       model: primaryModel,
       models: modelsArray,
       activeModel: primaryModel,
-      smolModel,
-      slowModel,
-      planModel,
+      smolModel: smolModel || "",
+      slowModel: slowModel || "",
+      planModel: planModel || "",
       subagentModels: mergedSubagentModels,
       baseUrl: normalizedBaseUrl,
       apiKey: keyToUse,
     });
+
+    // 2. BEST-EFFORT: Update local models.yml & config.yml if local filesystem allows
+    try {
+      const ompDir = getOmpDir();
+      await fs.mkdir(ompDir, { recursive: true });
+
+      // Build model definitions for models.yml
+      const modelItems = modelsArray.map((modelId) => {
+        const slash = modelId.indexOf("/");
+        const provider = slash > 0 ? modelId.slice(0, slash) : null;
+        const cleanId = slash > 0 ? modelId.slice(slash + 1) : modelId;
+        const caps = getCapabilitiesForModel(provider, cleanId);
+
+        return {
+          id: modelId,
+          name: cleanId || modelId,
+          contextWindow: caps.contextWindow || 200000,
+          maxTokens: Math.min(caps.maxOutput || 8192, 32768),
+          reasoning: Boolean(caps.reasoning),
+          input: caps.vision ? ["text", "image"] : ["text"],
+        };
+      });
+
+      // Update models.yml
+      const modelsData = await readModelsYaml();
+      if (!modelsData.providers) modelsData.providers = {};
+      modelsData.providers["9router"] = {
+        baseUrl: normalizedBaseUrl,
+        apiKey: keyToUse,
+        api: "openai-completions",
+        models: modelItems,
+      };
+      await fs.writeFile(getModelsPath(), stringifyYAML(modelsData), "utf-8");
+
+      // Update config.yml
+      const configData = await readConfigYaml();
+      if (!configData.modelRoles) configData.modelRoles = {};
+      configData.modelRoles.default = `9router/${primaryModel}`;
+
+      if (smolModel && modelsArray.includes(smolModel)) {
+        configData.modelRoles.smol = `9router/${smolModel}`;
+      } else if (configData.modelRoles.smol?.startsWith("9router/")) {
+        delete configData.modelRoles.smol;
+      }
+
+      if (slowModel && modelsArray.includes(slowModel)) {
+        configData.modelRoles.slow = `9router/${slowModel}`;
+      } else if (configData.modelRoles.slow?.startsWith("9router/")) {
+        delete configData.modelRoles.slow;
+      }
+
+      if (planModel && modelsArray.includes(planModel)) {
+        configData.modelRoles.plan = `9router/${planModel}`;
+      } else if (configData.modelRoles.plan?.startsWith("9router/")) {
+        delete configData.modelRoles.plan;
+      }
+
+      if (subagentModels && typeof subagentModels === "object") {
+        if (!configData["task.agentModelOverrides"]) {
+          configData["task.agentModelOverrides"] = {};
+        }
+        for (const [agentName, agentModel] of Object.entries(subagentModels)) {
+          const trimmed = typeof agentModel === "string" ? agentModel.trim() : "";
+          if (trimmed) {
+            configData["task.agentModelOverrides"][agentName] = trimmed.startsWith("9router/")
+              ? trimmed
+              : `9router/${trimmed}`;
+          } else if (configData["task.agentModelOverrides"][agentName]?.startsWith("9router/")) {
+            delete configData["task.agentModelOverrides"][agentName];
+          }
+        }
+        if (Object.keys(configData["task.agentModelOverrides"]).length === 0) {
+          delete configData["task.agentModelOverrides"];
+        }
+      }
+
+      await fs.writeFile(getConfigPath(), stringifyYAML(configData), "utf-8");
+    } catch (fsError) {
+      console.log("Note: local OMP config files could not be updated (running in container or remote):", fsError.message);
+    }
 
     return NextResponse.json({
       success: true,
