@@ -1,3 +1,8 @@
+# v0.5.79 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: sanitize OMP `models.yml` and `config.yml` generation in `.bat`, `.command`, and `.sh` setup scripts to prevent invalid trailing YAML tokens (`{}`)
+
 # v0.5.78 (2026-08-25)
 
 ## Fixes
