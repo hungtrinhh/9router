@@ -1,3 +1,8 @@
+# v0.5.74 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: fix variable reference in Codex settings route and ensure config directory creation in Cowork settings route
+
 # v0.5.73 (2026-08-25)
 
 ## Fixes
