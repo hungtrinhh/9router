@@ -273,15 +273,15 @@ describe("dashboard guard local-only access", () => {
     expect(response).toBe(mocks.nextResponse);
   });
 
-  it("rejects remote dashboard mutations of CLI settings", async () => {
+  it("allows remote dashboard mutations of CLI settings when authenticated", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
     const response = await proxy(request(
       "/api/cli-tools/opencode-settings",
       { host: "router.example.com" },
       "POST",
     ));
 
-    expect(response.status).toBe(403);
-    expect(response.body.error).toBe("Apply and Reset are only available on the machine running 9Router");
+    expect(response).toBe(mocks.nextResponse);
   });
 
   it("allows remote CLI settings mutations with a valid CLI token", async () => {
