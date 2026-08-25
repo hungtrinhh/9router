@@ -1,3 +1,9 @@
+# v0.5.78 (2026-08-25)
+
+## Fixes
+- **CLI Tools**: eliminate form unmounting on background status re-checks across all tool cards so inputs never flicker or unmount
+- **CLI Tools**: fix `BaseUrlSelect` to prevent triggering `onChange` on component mount, eliminating auto-save reload loops
+
 # v0.5.77 (2026-08-25)
 
 ## Fixes
