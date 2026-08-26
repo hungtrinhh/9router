@@ -1,3 +1,8 @@
+# v0.5.81 (2026-08-26)
+
+## Fixes
+- **Antigravity/Gemini**: also expand numeric, `null`, and scalar-array property shorthands (`{ "port": 3000 }`, `{ "x": null }`, `[1, 2, 3]`) that previously caused `400 INVALID_ARGUMENT` — "Starting an object on a scalar field"
+
 # v0.5.80 (2026-08-26)
 
 ## Fixes
