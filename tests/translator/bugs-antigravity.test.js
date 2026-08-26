@@ -183,6 +183,38 @@ describe("Antigravity executor", () => {
     expect(props.names.type).toBe("array");
     expect(props.names.items.type).toBe("object"); // placeholder object
   });
+  // gemini.js: items: [ "a", "b" ] (scalar list as items) is a nested-array
+  // shorthand that previously stayed a raw array → 400 at properties[N].value.items.
+  it("expands scalar-array items shorthand", () => {
+    const out = new AntigravityExecutor().transformRequest("gemini-2.5-pro", {
+      request: {
+        contents: [{ role: "user", parts: [{ text: "hi" }] }],
+        tools: [{
+          functionDeclarations: [{
+            name: "matrix",
+            description: "Matrix",
+            parameters: {
+              type: "object",
+              properties: {
+                grid: { type: "array", items: ["a", "b"] },
+                deep: {
+                  type: "object",
+                  properties: { level: { type: "array", items: [1, 2] } },
+                },
+              },
+            },
+          }],
+        }],
+      },
+    }, true, { projectId: "project-1", connectionId: "conn-1" });
+
+    const props = out.request.tools[0].functionDeclarations[0].parameters.properties;
+    expect(props.grid.type).toBe("array");
+    expect(props.grid.items.type).toBe("array");
+    expect(props.grid.items.items.type).toBe("object"); // placeholder
+    expect(props.deep.properties.level.type).toBe("array");
+    expect(props.deep.properties.level.items.type).toBe("array");
+  });
 
   it("does not inject the legacy Antigravity default system prompt for Gemini-backed models", () => {
     const out = openaiToAntigravityRequest("gemini-3.5-flash-low", {

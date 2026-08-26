@@ -361,6 +361,16 @@ function expandShorthandSchemas(obj) {
     obj.items = { type: t };
   } else if (obj.items === null || typeof obj.items === "number" || typeof obj.items === "boolean") {
     obj.items = scalarToSchema(obj.items);
+  } else if (Array.isArray(obj.items)) {
+    // Nested-array shorthand: items: [ "a", "b" ] (scalar list) → array schema.
+    // Items holding objects (a list of schemas) are left untouched.
+    const allScalar = obj.items.length === 0 || obj.items.every(v => v === null || typeof v !== "object");
+    if (allScalar) {
+      obj.items = {
+        type: "array",
+        items: obj.items.length > 0 ? scalarToSchema(obj.items[0]) : { type: "string" },
+      };
+    }
   }
 
   for (const value of Object.values(obj)) {
@@ -464,6 +474,45 @@ export function cleanJSONSchemaForAntigravity(schema) {
   }
 
   addPlaceholders(cleaned);
+
+  // Phase 6: Safety net — any property value or items that is still not a
+  // schema object (scalar from an exotic shorthand, leftover after earlier
+  // phases) would be rejected by Gemini as "Starting an object on a scalar
+  // field". Force every slot to an object schema and log the offending schema
+  // so the source form can be handled precisely.
+  function enforceSchemaObjects(obj) {
+    if (!obj || typeof obj !== "object") return;
+
+    if (obj.properties && typeof obj.properties === "object" && !Array.isArray(obj.properties)) {
+      for (const key of Object.keys(obj.properties)) {
+        const value = obj.properties[key];
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          enforceSchemaObjects(value);
+        } else {
+          console.warn(`[antigravity] non-object schema property "${key}": ${JSON.stringify(value)}`);
+          obj.properties[key] = { type: "object" };
+        }
+      }
+    }
+
+    if (obj.items !== undefined) {
+      const items = obj.items;
+      if (items && typeof items === "object" && !Array.isArray(items)) {
+        enforceSchemaObjects(items);
+      } else {
+        console.warn(`[antigravity] non-object schema items: ${JSON.stringify(items)}`);
+        obj.items = { type: "object" };
+      }
+    }
+
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === "object") {
+        enforceSchemaObjects(value);
+      }
+    }
+  }
+
+  enforceSchemaObjects(cleaned);
 
   return cleaned;
 }
