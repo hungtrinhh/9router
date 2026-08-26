@@ -301,6 +301,45 @@ function flattenTypeArrays(obj) {
   }
 }
 
+// Expand JSON Schema shorthand into full schema objects.
+// Clients (Claude/Anthropic tool schemas, MCP) routinely emit:
+//   - property values as bare type strings: { "foo": "object" }
+//   - boolean schemas: true (= any value) / false (= never valid)
+// Gemini/Antigravity reject both as 400 INVALID_ARGUMENT. Walk `properties`
+// values and `items` explicitly — a plain recursive value scan cannot reach
+// entries that are strings/booleans, not objects.
+function expandShorthandSchemas(obj) {
+  if (!obj || typeof obj !== "object") return;
+
+  if (obj.properties && typeof obj.properties === "object" && !Array.isArray(obj.properties)) {
+    for (const key of Object.keys(obj.properties)) {
+      const value = obj.properties[key];
+      if (value === true) {
+        obj.properties[key] = { type: "object" };
+      } else if (value === false) {
+        obj.properties[key] = { type: "object" };
+      } else if (typeof value === "string") {
+        const t = value === "number" ? "number" : value === "integer" ? "integer" : value === "boolean" ? "boolean" : value === "array" ? "array" : value === "string" ? "string" : "object";
+        obj.properties[key] = { type: t };
+      }
+    }
+  }
+
+  if (obj.items === true) {
+    obj.items = { type: "object" };
+  } else if (obj.items === false) {
+    obj.items = { type: "object" };
+  } else if (typeof obj.items === "string") {
+    const t = obj.items === "number" ? "number" : obj.items === "integer" ? "integer" : obj.items === "boolean" ? "boolean" : obj.items === "array" ? "array" : obj.items === "string" ? "string" : "object";
+    obj.items = { type: t };
+  }
+
+  for (const value of Object.values(obj)) {
+    if (value && typeof value === "object") {
+      expandShorthandSchemas(value);
+    }
+  }
+}
 // Infer missing type=object when properties exist (Gemini requires explicit type)
 function ensureObjectType(obj) {
   if (!obj || typeof obj !== "object") return;
@@ -314,6 +353,9 @@ export function cleanJSONSchemaForAntigravity(schema) {
 
   // Mutate directly (schema is only used once per request)
   let cleaned = schema;
+
+  // Phase 0: Expand shorthand schemas (string/boolean property values, boolean items)
+  expandShorthandSchemas(cleaned);
 
   // Phase 1: Convert and prepare
   convertConstToEnum(cleaned);

@@ -108,6 +108,48 @@ describe("Antigravity executor", () => {
     const query = out.request.tools[0].functionDeclarations[0].parameters.properties.query;
     expect(query).toEqual({ type: "string", description: "Search query" });
   });
+  // gemini.js cleanJSONSchemaForAntigravity: string-shorthand property values
+  // ("foo": "object") and boolean items (items: true) are not valid schema objects
+  // and previously reached Antigravity as-is → 400 INVALID_ARGUMENT at
+  // properties[N].value / properties[N].value.items.
+  it("expands string-shorthand properties and boolean items into schema objects", () => {
+    const out = new AntigravityExecutor().transformRequest("gemini-2.5-pro", {
+      request: {
+        contents: [{ role: "user", parts: [{ text: "hi" }] }],
+        tools: [{
+          functionDeclarations: [{
+            name: "search",
+            description: "Search",
+            parameters: {
+              type: "object",
+              properties: {
+                query: "string",
+                strict: "boolean",
+                nested: {
+                  type: "object",
+                  properties: {
+                    anything: true,
+                    never: false,
+                  },
+                },
+                list: {
+                  type: "array",
+                  items: true,
+                },
+              },
+            },
+          }],
+        }],
+      },
+    }, true, { projectId: "project-1", connectionId: "conn-1" });
+
+    const props = out.request.tools[0].functionDeclarations[0].parameters.properties;
+    // Phase 5 (addPlaceholders) fills empty object schemas with a `reason`
+    // placeholder — expanded shorthand booleans therefore carry it too.
+    expect(props.nested.properties.anything.type).toBe("object");
+    expect(props.nested.properties.never.type).toBe("object");
+    expect(props.list.items.type).toBe("object");
+  });
 
   it("does not inject the legacy Antigravity default system prompt for Gemini-backed models", () => {
     const out = openaiToAntigravityRequest("gemini-3.5-flash-low", {
