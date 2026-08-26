@@ -1,3 +1,8 @@
+# v0.5.80 (2026-08-26)
+
+## Fixes
+- **Antigravity/Gemini**: fix `400 INVALID_ARGUMENT` from Vertex AI when tool schemas contain string-shorthand property values (`"foo": "object"`) or boolean `items` (`items: true`) — expand shorthand schemas into full `{ type: ... }` objects before sending to Antigravity
+
 # v0.5.79 (2026-08-25)
 
 ## Fixes
