@@ -144,11 +144,44 @@ describe("Antigravity executor", () => {
     }, true, { projectId: "project-1", connectionId: "conn-1" });
 
     const props = out.request.tools[0].functionDeclarations[0].parameters.properties;
-    // Phase 5 (addPlaceholders) fills empty object schemas with a `reason`
-    // placeholder — expanded shorthand booleans therefore carry it too.
-    expect(props.nested.properties.anything.type).toBe("object");
-    expect(props.nested.properties.never.type).toBe("object");
+    // bare true/false shorthand → boolean schema; the empty-object items
+    // placeholder (list.items) is filled by Phase 5.
+    expect(props.nested.properties.anything.type).toBe("boolean");
+    expect(props.nested.properties.never.type).toBe("boolean");
     expect(props.list.items.type).toBe("object");
+  });
+  // gemini.js expandShorthandSchemas: numeric/null/array scalar property
+  // values (MCP shorthand { "port": 3000 }, { "x": null }, [1,2,3]) previously
+  // reached Antigravity as scalars → 400 "Starting an object on a scalar field".
+  it("expands numeric, null, and scalar-array property shorthands", () => {
+    const out = new AntigravityExecutor().transformRequest("gemini-2.5-pro", {
+      request: {
+        contents: [{ role: "user", parts: [{ text: "hi" }] }],
+        tools: [{
+          functionDeclarations: [{
+            name: "lookup",
+            description: "Lookup",
+            parameters: {
+              type: "object",
+              properties: {
+                port: 3000,
+                maybe: null,
+                coords: [1, 2, 3],
+                names: ["a", "b"],
+              },
+            },
+          }],
+        }],
+      },
+    }, true, { projectId: "project-1", connectionId: "conn-1" });
+
+    const props = out.request.tools[0].functionDeclarations[0].parameters.properties;
+    expect(props.port).toEqual({ type: "number" });
+    expect(props.maybe.type).toBe("object"); // placeholder object
+    expect(props.coords.type).toBe("array");
+    expect(props.coords.items.type).toBe("number");
+    expect(props.names.type).toBe("array");
+    expect(props.names.items.type).toBe("object"); // placeholder object
   });
 
   it("does not inject the legacy Antigravity default system prompt for Gemini-backed models", () => {

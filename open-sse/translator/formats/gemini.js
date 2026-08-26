@@ -305,22 +305,49 @@ function flattenTypeArrays(obj) {
 // Clients (Claude/Anthropic tool schemas, MCP) routinely emit:
 //   - property values as bare type strings: { "foo": "object" }
 //   - boolean schemas: true (= any value) / false (= never valid)
-// Gemini/Antigravity reject both as 400 INVALID_ARGUMENT. Walk `properties`
-// values and `items` explicitly — a plain recursive value scan cannot reach
-// entries that are strings/booleans, not objects.
+//   - numeric/null/array scalar shorthands: { "port": 3000 }, { "x": null }
+// Gemini/Antigravity reject all of these as 400 INVALID_ARGUMENT
+// ("Starting an object on a scalar field"). Walk `properties` values and
+// `items` explicitly — a plain recursive value scan cannot reach entries
+// that are scalars, not objects.
+function typeFromScalar(value) {
+  if (value === null) return "object";
+  switch (typeof value) {
+    case "string":
+      return value === "number" || value === "integer" || value === "boolean" || value === "array" || value === "string" ? value : "object";
+    case "number":
+      return "number";
+    case "boolean":
+      return "boolean";
+    default:
+      return "object";
+  }
+}
+
+function scalarToSchema(value) {
+  const t = typeFromScalar(value);
+  return { type: t };
+}
+
 function expandShorthandSchemas(obj) {
   if (!obj || typeof obj !== "object") return;
 
   if (obj.properties && typeof obj.properties === "object" && !Array.isArray(obj.properties)) {
     for (const key of Object.keys(obj.properties)) {
       const value = obj.properties[key];
-      if (value === true) {
-        obj.properties[key] = { type: "object" };
-      } else if (value === false) {
-        obj.properties[key] = { type: "object" };
-      } else if (typeof value === "string") {
-        const t = value === "number" ? "number" : value === "integer" ? "integer" : value === "boolean" ? "boolean" : value === "array" ? "array" : value === "string" ? "string" : "object";
-        obj.properties[key] = { type: t };
+      if (value && typeof value === "object" && !Array.isArray(value)) continue; // already a schema
+      if (Array.isArray(value)) {
+        // Scalar array shorthand: [ "a", "b" ] or [ 1, 2 ] → array schema.
+        // If the array holds objects (a list of schemas), leave it untouched.
+        const allScalar = value.length === 0 || value.every(v => v === null || typeof v !== "object");
+        if (allScalar) {
+          obj.properties[key] = {
+            type: "array",
+            items: value.length > 0 ? scalarToSchema(value[0]) : { type: "string" },
+          };
+        }
+      } else {
+        obj.properties[key] = scalarToSchema(value);
       }
     }
   }
@@ -332,6 +359,8 @@ function expandShorthandSchemas(obj) {
   } else if (typeof obj.items === "string") {
     const t = obj.items === "number" ? "number" : obj.items === "integer" ? "integer" : obj.items === "boolean" ? "boolean" : obj.items === "array" ? "array" : obj.items === "string" ? "string" : "object";
     obj.items = { type: t };
+  } else if (obj.items === null || typeof obj.items === "number" || typeof obj.items === "boolean") {
+    obj.items = scalarToSchema(obj.items);
   }
 
   for (const value of Object.values(obj)) {
