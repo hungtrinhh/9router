@@ -1,3 +1,8 @@
+# v0.5.82 (2026-08-26)
+
+## Fixes
+- **Antigravity/Gemini**: handle scalar-array `items` shorthand (`items: ["a", "b"]`) and add a final safety net that forces any remaining non-object schema slot (`properties[*].value`, `items`) into an object schema, eliminating the `400 INVALID_ARGUMENT` "Starting an object on a scalar field" rejection
+
 # v0.5.81 (2026-08-26)
 
 ## Fixes
