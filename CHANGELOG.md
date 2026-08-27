@@ -1,3 +1,8 @@
+# v0.5.83 (2026-08-27)
+
+## Fixes
+- **Antigravity/Gemini**: handle array-form `properties` (Antigravity/Google Cloud Code sends `properties` as an array of `{ name, value: <schema> }` entries) in both `expandShorthandSchemas` and the schema safety net — scalar shorthand inside `value`/`items` previously stayed scalar and caused `400 INVALID_ARGUMENT` "Starting an object on a scalar field" at `properties[N].value`
+
 # v0.5.82 (2026-08-26)
 
 ## Fixes
