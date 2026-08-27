@@ -133,7 +133,83 @@ export function generateProjectId() {
   return `${adj}-${noun}-${crypto.randomUUID().slice(0, 5)}`;
 }
 
-// Helper: Remove unsupported keywords recursively from object/array
+// Helper: Visit each child schema in a JSON schema object without traversing non-schema maps (like properties hashmap)
+function forEachChildSchema(obj, fn) {
+  if (!obj || typeof obj !== "object") return;
+
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      if (item && typeof item === "object") fn(item);
+    }
+    return;
+  }
+
+  if (obj.properties) {
+    if (Array.isArray(obj.properties)) {
+      for (const entry of obj.properties) {
+        if (entry && typeof entry === "object") {
+          if (entry.value && typeof entry.value === "object") fn(entry.value);
+          if (entry.items && typeof entry.items === "object") fn(entry.items);
+          if (!("value" in entry) && entry.properties !== undefined) fn(entry);
+        }
+      }
+    } else if (typeof obj.properties === "object") {
+      for (const propSchema of Object.values(obj.properties)) {
+        if (propSchema && typeof propSchema === "object") fn(propSchema);
+      }
+    }
+  }
+
+  if (obj.patternProperties && typeof obj.patternProperties === "object" && !Array.isArray(obj.patternProperties)) {
+    for (const propSchema of Object.values(obj.patternProperties)) {
+      if (propSchema && typeof propSchema === "object") fn(propSchema);
+    }
+  }
+
+  if (obj.additionalProperties && typeof obj.additionalProperties === "object" && !Array.isArray(obj.additionalProperties)) {
+    fn(obj.additionalProperties);
+  }
+
+  if (obj.items) {
+    if (Array.isArray(obj.items)) {
+      for (const item of obj.items) {
+        if (item && typeof item === "object") fn(item);
+      }
+    } else if (typeof obj.items === "object") {
+      fn(obj.items);
+    }
+  }
+
+  if (obj.prefixItems && Array.isArray(obj.prefixItems)) {
+    for (const item of obj.prefixItems) {
+      if (item && typeof item === "object") fn(item);
+    }
+  }
+
+  if (obj.allOf && Array.isArray(obj.allOf)) {
+    for (const sub of obj.allOf) {
+      if (sub && typeof sub === "object") fn(sub);
+    }
+  }
+
+  if (obj.anyOf && Array.isArray(obj.anyOf)) {
+    for (const sub of obj.anyOf) {
+      if (sub && typeof sub === "object") fn(sub);
+    }
+  }
+
+  if (obj.oneOf && Array.isArray(obj.oneOf)) {
+    for (const sub of obj.oneOf) {
+      if (sub && typeof sub === "object") fn(sub);
+    }
+  }
+
+  if (obj.not && typeof obj.not === "object") {
+    fn(obj.not);
+  }
+}
+
+// Helper: Remove unsupported keywords recursively from schema objects
 // Also strips all vendor extension fields (x- prefixed) not supported by Gemini
 function removeUnsupportedKeywords(obj, keywords) {
   if (!obj || typeof obj !== "object") return;
@@ -148,14 +224,10 @@ function removeUnsupportedKeywords(obj, keywords) {
   for (const key of Object.keys(obj)) {
     if (keywords.includes(key) || key.startsWith("x-")) {
       delete obj[key];
-      continue;
-    }
-
-    const value = obj[key];
-    if (value && typeof value === "object") {
-      removeUnsupportedKeywords(value, keywords);
     }
   }
+
+  forEachChildSchema(obj, (child) => removeUnsupportedKeywords(child, keywords));
 }
 
 // Convert const to enum
@@ -167,11 +239,7 @@ function convertConstToEnum(obj) {
     delete obj.const;
   }
 
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      convertConstToEnum(value);
-    }
-  }
+  forEachChildSchema(obj, (child) => convertConstToEnum(child));
 }
 
 // Convert enum values to strings (Gemini requires string enum values + explicit type:"string")
@@ -186,11 +254,7 @@ function convertEnumValuesToStrings(obj) {
     }
   }
 
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      convertEnumValuesToStrings(value);
-    }
-  }
+  forEachChildSchema(obj, (child) => convertEnumValuesToStrings(child));
 }
 
 // Merge allOf schemas
@@ -220,11 +284,7 @@ function mergeAllOf(obj) {
     if (merged.required) obj.required = [...(obj.required || []), ...merged.required];
   }
 
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      mergeAllOf(value);
-    }
-  }
+  forEachChildSchema(obj, (child) => mergeAllOf(child));
 }
 
 // Select best schema from anyOf/oneOf
@@ -278,11 +338,7 @@ function flattenAnyOfOneOf(obj) {
     }
   }
 
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      flattenAnyOfOneOf(value);
-    }
-  }
+  forEachChildSchema(obj, (child) => flattenAnyOfOneOf(child));
 }
 
 // Flatten type arrays
@@ -294,11 +350,7 @@ function flattenTypeArrays(obj) {
     obj.type = nonNullTypes.length > 0 ? nonNullTypes[0] : "string";
   }
 
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      flattenTypeArrays(value);
-    }
-  }
+  forEachChildSchema(obj, (child) => flattenTypeArrays(child));
 }
 
 // Expand JSON Schema shorthand into full schema objects.
@@ -412,17 +464,14 @@ function expandShorthandSchemas(obj) {
     }
   }
 
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === "object") {
-      expandShorthandSchemas(value);
-    }
-  }
+  forEachChildSchema(obj, (child) => expandShorthandSchemas(child));
 }
+
 // Infer missing type=object when properties exist (Gemini requires explicit type)
 function ensureObjectType(obj) {
   if (!obj || typeof obj !== "object") return;
   if (obj.properties && !obj.type) obj.type = "object";
-  for (const v of Object.values(obj)) if (v && typeof v === "object") ensureObjectType(v);
+  forEachChildSchema(obj, (child) => ensureObjectType(child));
 }
 
 // Clean JSON Schema for Antigravity API compatibility - removes unsupported keywords recursively
@@ -455,22 +504,28 @@ export function cleanJSONSchemaForAntigravity(schema) {
     if (!obj || typeof obj !== "object") return;
 
     if (obj.required && Array.isArray(obj.required) && obj.properties) {
-      const validRequired = obj.required.filter(field =>
-        Object.prototype.hasOwnProperty.call(obj.properties, field)
-      );
-      if (validRequired.length === 0) {
-        delete obj.required;
-      } else {
-        obj.required = validRequired;
+      if (Array.isArray(obj.properties)) {
+        const validRequired = obj.required.filter(field =>
+          obj.properties.some(p => p && (p.name === field || p === field))
+        );
+        if (validRequired.length === 0) {
+          delete obj.required;
+        } else {
+          obj.required = validRequired;
+        }
+      } else if (typeof obj.properties === "object") {
+        const validRequired = obj.required.filter(field =>
+          Object.prototype.hasOwnProperty.call(obj.properties, field)
+        );
+        if (validRequired.length === 0) {
+          delete obj.required;
+        } else {
+          obj.required = validRequired;
+        }
       }
     }
 
-    // Recurse into nested objects
-    for (const value of Object.values(obj)) {
-      if (value && typeof value === "object") {
-        cleanupRequired(value);
-      }
-    }
+    forEachChildSchema(obj, (child) => cleanupRequired(child));
   }
 
   cleanupRequired(cleaned);
@@ -493,7 +548,7 @@ export function cleanJSONSchemaForAntigravity(schema) {
     }
 
     if (obj.type === "object") {
-      if (!obj.properties || Object.keys(obj.properties).length === 0) {
+      if (!obj.properties || (typeof obj.properties === "object" && !Array.isArray(obj.properties) && Object.keys(obj.properties).length === 0)) {
         obj.properties = {
           reason: {
             type: "string",
@@ -504,12 +559,7 @@ export function cleanJSONSchemaForAntigravity(schema) {
       }
     }
 
-    // Recurse into nested objects
-    for (const value of Object.values(obj)) {
-      if (value && typeof value === "object") {
-        addPlaceholders(value);
-      }
-    }
+    forEachChildSchema(obj, (child) => addPlaceholders(child));
   }
 
   addPlaceholders(cleaned);
@@ -572,11 +622,7 @@ export function cleanJSONSchemaForAntigravity(schema) {
       }
     }
 
-    for (const value of Object.values(obj)) {
-      if (value && typeof value === "object") {
-        enforceSchemaObjects(value);
-      }
-    }
+    forEachChildSchema(obj, (child) => enforceSchemaObjects(child));
   }
 
   enforceSchemaObjects(cleaned);

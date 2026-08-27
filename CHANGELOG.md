@@ -1,3 +1,8 @@
+# v0.5.85 (2026-08-27)
+
+## Fixes
+- **Antigravity/Gemini**: fix `400 INVALID_ARGUMENT` ("Starting an object on a scalar field") when tool parameters contain schema keywords or sub-properties named `properties`, `format`, `default`, `type`, `required` — isolate schema visitor traversal to child schema AST nodes only, preventing properties maps from corrupting schema types and deleting tool parameters
+
 # v0.5.84 (2026-08-27)
 
 ## Fixes

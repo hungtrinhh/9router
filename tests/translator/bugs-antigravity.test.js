@@ -291,6 +291,47 @@ describe("Antigravity executor", () => {
       items: { type: "number" },
     });
   });
+  it("correctly preserves parameters named properties, format, default without corrupting types", () => {
+    const schema = {
+      type: "object",
+      properties: {
+        i: { type: "string" },
+        action: { type: "string" },
+        format: { type: "string", description: "Audio format" },
+        default: { type: "string", description: "Default value" },
+        properties: {
+          anyOf: [
+            { type: "object", additionalProperties: true },
+            { type: "string" },
+            { type: "null" }
+          ],
+          default: null
+        }
+      },
+      required: ["action", "i", "format", "default"]
+    };
+
+    const cleaned = cleanJSONSchemaForAntigravity(schema);
+
+    // 1. Should preserve format and default as properties
+    expect(cleaned.properties.format).toEqual({ type: "string", description: "Audio format" });
+    expect(cleaned.properties.default).toEqual({ type: "string", description: "Default value" });
+
+    // 2. Should clean `properties` property without turning its type or required into object
+    expect(cleaned.properties.properties).toBeTypeOf("object");
+    expect(cleaned.properties.properties.type).toBe("object");
+    expect(cleaned.properties.properties.required).toEqual(["reason"]);
+    expect(cleaned.properties.properties.properties).toEqual({
+      reason: {
+        type: "string",
+        description: "Brief explanation of why you are calling this tool"
+      }
+    });
+
+    // 3. Root schema should not have ghost `type` property in properties map
+    expect(cleaned.properties.type).toBeUndefined();
+    expect(cleaned.required).toEqual(["action", "i", "format", "default"]);
+  });
 
   it("does not inject the legacy Antigravity default system prompt for Gemini-backed models", () => {
     const out = openaiToAntigravityRequest("gemini-3.5-flash-low", {
