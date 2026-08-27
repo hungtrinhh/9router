@@ -350,6 +350,45 @@ function expandShorthandSchemas(obj) {
         obj.properties[key] = scalarToSchema(value);
       }
     }
+  } else if (Array.isArray(obj.properties)) {
+    // Array-form properties (Antigravity/Google Cloud Code): each entry is
+    // { name, value: <schema> }. Expand scalar shorthand inside `value`.
+    for (let i = 0; i < obj.properties.length; i++) {
+      const element = obj.properties[i];
+      if (!element || typeof element !== "object") continue;
+      // Handle element.value scalar shorthand
+      if ("value" in element) {
+        const v = element.value;
+        if (v && typeof v === "object" && !Array.isArray(v)) {
+          expandShorthandSchemas(v); // already a schema object — recurse
+        } else if (Array.isArray(v)) {
+          // Scalar array shorthand
+          const allScalar = v.length === 0 || v.every(x => x === null || typeof x !== "object");
+          if (allScalar) {
+            element.value = {
+              type: "array",
+              items: v.length > 0 ? scalarToSchema(v[0]) : { type: "string" },
+            };
+          }
+        } else {
+          element.value = scalarToSchema(v); // scalar shorthand
+        }
+      }
+      // Handle element.items shorthand
+      if ("items" in element) {
+        const items = element.items;
+        if (items && typeof items === "object" && !Array.isArray(items)) {
+          // already a schema — recurse
+        } else {
+          element.items = (items === true || items === false || items === null || typeof items === "string" || typeof items === "number")
+            ? scalarToSchema(items) : { type: "object" };
+        }
+      }
+      // Handle element itself being a plain schema (no "value" key)
+      if (!("value" in element) && element.properties !== undefined) {
+        expandShorthandSchemas(element);
+      }
+    }
   }
 
   if (obj.items === true) {
@@ -491,6 +530,34 @@ export function cleanJSONSchemaForAntigravity(schema) {
         } else {
           console.warn(`[antigravity] non-object schema property "${key}": ${JSON.stringify(value)}`);
           obj.properties[key] = { type: "object" };
+        }
+      }
+    } else if (Array.isArray(obj.properties)) {
+      // Array-form properties (Antigravity/Google Cloud Code): each entry is
+      // { name, value: <schema> }. Force every `value`/`items` to a schema object.
+      for (let i = 0; i < obj.properties.length; i++) {
+        const element = obj.properties[i];
+        if (!element || typeof element !== "object") continue;
+        if ("value" in element) {
+          const v = element.value;
+          if (v && typeof v === "object" && !Array.isArray(v)) {
+            enforceSchemaObjects(v);
+          } else {
+            console.warn(`[antigravity] non-object schema property value: ${JSON.stringify(v)}`);
+            element.value = { type: "object" };
+          }
+        }
+        if ("items" in element) {
+          const items = element.items;
+          if (items && typeof items === "object" && !Array.isArray(items)) {
+            enforceSchemaObjects(items);
+          } else {
+            console.warn(`[antigravity] non-object schema items: ${JSON.stringify(items)}`);
+            element.items = { type: "object" };
+          }
+        }
+        if (!("value" in element) && element.properties !== undefined) {
+          enforceSchemaObjects(element);
         }
       }
     }

@@ -6,6 +6,7 @@ import { FORMATS } from "../../open-sse/translator/formats.js";
 import { AntigravityExecutor } from "../../open-sse/executors/antigravity.js";
 import { openaiToAntigravityRequest } from "../../open-sse/translator/request/openai-to-gemini.js";
 import { ANTIGRAVITY_DEFAULT_SYSTEM } from "../../open-sse/config/appConstants.js";
+import { cleanJSONSchemaForAntigravity } from "../../open-sse/translator/formats/gemini.js";
 
 const AG2O = (req) =>
   translateRequest(FORMATS.ANTIGRAVITY, FORMATS.OPENAI, "m", { request: req }, true, null, null);
@@ -214,6 +215,81 @@ describe("Antigravity executor", () => {
     expect(props.grid.items.items.type).toBe("object"); // placeholder
     expect(props.deep.properties.level.type).toBe("array");
     expect(props.deep.properties.level.items.type).toBe("array");
+  });
+
+  // gemini.js expandShorthandSchemas/enforceSchemaObjects: Antigravity/Google
+  // Cloud Code sends parameters.properties as an ARRAY of { name, value: <schema> }
+  // entries. Scalar shorthand inside `value` previously stayed scalar → 400
+  // "Starting an object on a scalar field" at properties[N].value.
+  it("expands array-form properties with scalar shorthand values", () => {
+    const schema = {
+      type: "object",
+      properties: [
+        { name: "query", value: "string" },
+        { name: "port", value: 3000 },
+        { name: "flag", value: null },
+        { name: "enabled", value: true },
+        { name: "items", value: ["a", "b", "c"] },
+        { name: "nested", value: { type: "object", properties: [{ name: "inner", value: 42 }] } },
+      ],
+    };
+
+    const cleaned = cleanJSONSchemaForAntigravity(schema);
+    const props = cleaned.properties;
+
+    // Every properties[i].value must be a schema object with a type
+    expect(props).toHaveLength(6);
+    for (const p of props) {
+      expect(p.value).toBeTypeOf("object");
+      expect(typeof p.value.type).toBe("string");
+    }
+    // Scalar shorthands expanded to the correct type
+    const byName = Object.fromEntries(props.map((p) => [p.name, p.value]));
+    expect(byName.query).toEqual({ type: "string" });
+    expect(byName.port).toEqual({ type: "number" });
+    expect(byName.flag.type).toBe("object"); // null → placeholder object
+    expect(byName.enabled).toEqual({ type: "boolean" });
+    // scalar string "a" is not a schema type keyword → items becomes an object placeholder
+    expect(byName.items.type).toBe("array");
+    expect(byName.items.items.type).toBe("object");
+    // Nested array-form properties also expanded
+    expect(byName.nested.properties).toHaveLength(1);
+    expect(byName.nested.properties[0].value).toEqual({ type: "number" });
+  });
+
+  // Deep nesting: array-form properties recursed at every level
+  it("array-form properties with nested objects recurses correctly", () => {
+    const schema = {
+      type: "object",
+      properties: [
+        {
+          name: "l1",
+          value: {
+            type: "object",
+            properties: [
+              {
+                name: "l2",
+                value: {
+                  type: "object",
+                  properties: [
+                    { name: "l3", value: "integer" },
+                    { name: "l3list", value: [1, 2, 3] },
+                  ],
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+
+    const cleaned = cleanJSONSchemaForAntigravity(schema);
+    const l1 = cleaned.properties[0].value;
+    expect(l1.properties[0].value.properties[0].value).toEqual({ type: "integer" });
+    expect(l1.properties[0].value.properties[1].value).toEqual({
+      type: "array",
+      items: { type: "number" },
+    });
   });
 
   it("does not inject the legacy Antigravity default system prompt for Gemini-backed models", () => {
