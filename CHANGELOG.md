@@ -1,3 +1,10 @@
+# v0.5.84 (2026-08-27)
+
+## Fixes
+- **CLI Tools**: resolve authoritative per-model context window and max output tokens across all CLI tools (Codex, OpenCode, Copilot, Droid, Grok-Build, OMP)
+- **Capabilities**: fix provider alias resolution bug where aliases (`cx`, `kr`, `cc`) bypassed provider-specific capability overrides in `getCapabilitiesForModel`
+- **Models API**: ensure `/api/models` returns accurate context window limits and capabilities mapped via `resolveModelCaps`
+
 # v0.5.83 (2026-08-27)
 
 ## Fixes

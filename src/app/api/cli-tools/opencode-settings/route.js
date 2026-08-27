@@ -5,6 +5,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs/promises";
 import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
+import { resolveModelLimits } from "@/shared/utils/modelLimits";
 import path from "path";
 import os from "os";
 
@@ -141,7 +142,12 @@ export async function POST(request) {
     // Add or update entries for all requested models
     for (const m of modelsArray) {
       if (!m || typeof m !== "string") continue;
-      existingProvider.models[m] = { name: m, modalities: { input: ["text", "image"], output: ["text"] } };
+      const limits = resolveModelLimits(m);
+      existingProvider.models[m] = {
+        name: m,
+        limit: { context: limits.contextWindow, output: limits.maxOutput },
+        modalities: { input: ["text", "image"], output: ["text"] },
+      };
     }
 
     // Save merged provider back

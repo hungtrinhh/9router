@@ -8,6 +8,7 @@ import path from "path";
 import os from "os";
 import { parseTOML, stringifyTOML } from "confbox";
 import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
+import { resolveModelLimits } from "@/shared/utils/modelLimits";
 
 const execAsync = promisify(exec);
 
@@ -137,6 +138,12 @@ export async function POST(request) {
     parsed.model = model;
     parsed.model_provider = "9router";
 
+    // Pin context window / max output to the model's authoritative limits so
+    // Codex doesn't default to its own conservative (or wrong) values.
+    const limits = resolveModelLimits(model);
+    parsed.model_context_window = limits.contextWindow;
+    parsed.model_max_output_tokens = limits.maxOutput;
+
     // Update or create 9router provider section (no api_key - Codex reads from auth.json)
     // Ensure /v1 suffix is added only once
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
@@ -176,6 +183,8 @@ export async function POST(request) {
       subagentModel: effectiveSubagentModel,
       baseUrl: normalizedBaseUrl,
       apiKey,
+      contextWindow: limits.contextWindow,
+      maxOutput: limits.maxOutput,
     });
     return NextResponse.json({
       success: true,

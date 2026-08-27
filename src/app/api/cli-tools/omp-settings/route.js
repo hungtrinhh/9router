@@ -8,7 +8,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { getCliToolConfig, setCliToolConfig, deleteCliToolConfig } from "@/lib/db/index.js";
 import { parseYAML, stringifyYAML } from "confbox";
-import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { resolveModelCaps } from "@/shared/utils/modelLimits";
 
 const execAsync = promisify(exec);
 
@@ -253,10 +253,8 @@ export async function POST(request) {
 
       // Build model definitions for models.yml
       const modelItems = modelsArray.map((modelId) => {
-        const slash = modelId.indexOf("/");
-        const provider = slash > 0 ? modelId.slice(0, slash) : null;
-        const cleanId = slash > 0 ? modelId.slice(slash + 1) : modelId;
-        const caps = getCapabilitiesForModel(provider, cleanId);
+        const cleanId = modelId.includes("/") ? modelId.slice(modelId.indexOf("/") + 1) : modelId;
+        const caps = resolveModelCaps(modelId);
 
         return {
           id: modelId,

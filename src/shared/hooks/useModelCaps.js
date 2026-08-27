@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { resolveModelCaps } from "@/shared/utils/modelLimits";
 
 // Module cache: one /api/models fetch shared by every useModelCaps instance.
 let cache = null; // { byFull, byId } | null
@@ -43,8 +43,7 @@ function resolveCaps(byFull, byId, key) {
   if (byFull[key]) return byFull[key];
   const bare = key.includes("/") ? key.slice(key.indexOf("/") + 1) : key;
   if (byId[bare]) return byId[bare];
-  const provider = key.includes("/") ? key.slice(0, key.indexOf("/")) : null;
-  const c = getCapabilitiesForModel(provider, bare);
+  const c = resolveModelCaps(key);
   return {
     vision: c.vision,
     search: c.search,

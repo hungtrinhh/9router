@@ -3,7 +3,7 @@ import { getModelAliases, setModelAlias } from "@/models";
 import { getDisabledModels } from "@/lib/disabledModelsDb";
 import { AI_MODELS } from "@/shared/constants/config";
 import { getProviderAlias } from "@/shared/constants/providers";
-import { getCapabilitiesForModel } from "open-sse/providers/capabilities.js";
+import { resolveModelCaps } from "@/shared/utils/modelLimits";
 
 // GET /api/models - Get models with aliases
 export async function GET() {
@@ -21,7 +21,7 @@ export async function GET() {
         const fullModel = `${m.provider}/${m.model}`;
         const providerAlias = getProviderAlias(m.provider) || m.provider;
         const routedModel = `${providerAlias}/${m.model}`;
-        const c = getCapabilitiesForModel(m.provider, m.model);
+        const c = resolveModelCaps(routedModel);
         return {
           ...m,
           fullModel,

@@ -7,6 +7,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
+import { resolveModelLimits } from "@/shared/utils/modelLimits";
 
 const execAsync = promisify(exec);
 
@@ -140,6 +141,7 @@ export async function POST(request) {
     for (let i = 0; i < modelsArray.length; i++) {
       const m = modelsArray[i];
       if (!m || typeof m !== "string") continue;
+      const limits = resolveModelLimits(m);
       settings.customModels.push({
         model: m,
         id: `custom:9Router-${i}`,
@@ -147,7 +149,7 @@ export async function POST(request) {
         baseUrl: normalizedBaseUrl,
         apiKey: keyToUse,
         displayName: m,
-        maxOutputTokens: 131072,
+        maxOutputTokens: limits.maxOutput,
         noImageSupport: false,
         provider: "openai",
       });

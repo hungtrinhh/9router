@@ -5,6 +5,7 @@ import fs from "fs/promises";
 import path from "path";
 import os from "os";
 import { getCliToolConfig, setCliToolConfig } from "@/lib/db/index.js";
+import { resolveModelLimits } from "@/shared/utils/modelLimits";
 
 // Resolve chatLanguageModels.json path per OS
 const getConfigPath = () => {
@@ -90,15 +91,18 @@ export async function POST(request) {
       name: "9Router",
       vendor: "azure",
       apiKey: keyToUse,
-      models: models.map((id) => ({
-        id,
-        name: id,
-        url: endpointUrl,
-        toolCalling: true,
-        vision: false,
-        maxInputTokens: 128000,
-        maxOutputTokens: 16000,
-      })),
+      models: models.map((id) => {
+        const limits = resolveModelLimits(id);
+        return {
+          id,
+          name: id,
+          url: endpointUrl,
+          toolCalling: true,
+          vision: false,
+          maxInputTokens: limits.contextWindow,
+          maxOutputTokens: limits.maxOutput,
+        };
+      }),
     };
 
     // Replace existing 9Router entry or append
