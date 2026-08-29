@@ -522,16 +522,27 @@ else:
             for agent_name, agent_val in subagents.items():
                 if agent_val and str(agent_val).strip():
                     print(f"  {agent_name:<16}: {agent_val}")
-        if unique_models:
-            print(f"\n--- Configured Models ({len(unique_models)}) ---")
-            for mid in unique_models:
-                cat_model = catalog_models_map.get(mid, {})
-                caps = cat_model.get("capabilities") or {}
-                ctx = cat_model.get("context_length") or caps.get("contextWindow") or 200000
-                max_out = min(cat_model.get("max_completion_tokens") or caps.get("maxOutput") or 8192, 32768)
-                ctx_k = round(ctx / 1000)
-                is_primary = " (primary)" if mid == default_model else ""
-                print(f"  * {mid}{is_primary} [{ctx_k}k ctx, {max_out} max out]")
+    elif tool == "claude":
+        print("\n--- Claude Code Configuration ---")
+        if model:
+            print(f"  Default Model:   {model}")
+            print(f"  Mapped Roles:    Opus, Sonnet, Haiku -> {model}")
+        else:
+            print("  Model Routing:   Using Claude default model tier")
+        print("  Timeout:         600,000 ms (10 min)")
+    elif tool == "opencode":
+        print("\n--- OpenCode Configuration ---")
+        if model:
+            print(f"  Active Model:    9router/{model}")
+        if models_raw:
+            print(f"  Registered:      {models_raw}")
+    elif tool == "codex":
+        print("\n--- Codex Configuration ---")
+        print(f"  Auth Path:       {auth_path}")
+        if model:
+            print(f"  Primary Model:   {model}")
+            print(f"  Subagent Model:  {model}")
+        print("  Wire API:        responses")
     elif model:
         print(f"Primary Model:   {model}")
     if backups:

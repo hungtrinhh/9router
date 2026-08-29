@@ -1,3 +1,8 @@
+# v0.5.89 (2026-08-30)
+
+## Enhancements
+- **CLI Installers**: extend detailed setup summaries across all supported CLI tool installers (`omp`, `claude`, `opencode`, `codex`) in `.bat`/`.ps1` and `.sh`/`.command` scripts
+
 # v0.5.88 (2026-08-30)
 
 ## Enhancements

@@ -520,10 +520,34 @@ if ($Tool -eq "omp") {
       Write-Host " [${ctxK}k ctx, ${maxTokens} max out]" -ForegroundColor DarkCyan
     }
   }
-} else {
+} elseif ($Tool -eq "claude") {
+  Write-Host ""
+  Write-Host "--- Claude Code Configuration ---" -ForegroundColor Cyan
   if (-not [string]::IsNullOrWhiteSpace($Model)) {
-    Write-Host "Primary Model:   " -NoNewline; Write-Host $Model -ForegroundColor White
+    Write-Host "  Default Model:   " -NoNewline; Write-Host $Model -ForegroundColor White
+    Write-Host "  Mapped Roles:    " -NoNewline; Write-Host "Opus, Sonnet, Haiku -> $Model" -ForegroundColor Gray
+  } else {
+    Write-Host "  Model Routing:   " -NoNewline; Write-Host "Using Claude default model tier" -ForegroundColor Gray
   }
+  Write-Host "  Timeout:         " -NoNewline; Write-Host "600,000 ms (10 min)" -ForegroundColor Gray
+} elseif ($Tool -eq "opencode") {
+  Write-Host ""
+  Write-Host "--- OpenCode Configuration ---" -ForegroundColor Cyan
+  if (-not [string]::IsNullOrWhiteSpace($Model)) {
+    Write-Host "  Active Model:    " -NoNewline; Write-Host "9router/$Model" -ForegroundColor White
+  }
+  if ($null -ne $Models -and $Models.Count -gt 0) {
+    Write-Host "  Registered:      " -NoNewline; Write-Host ($Models -join ", ") -ForegroundColor Gray
+  }
+} elseif ($Tool -eq "codex") {
+  Write-Host ""
+  Write-Host "--- Codex Configuration ---" -ForegroundColor Cyan
+  Write-Host "  Auth Path:       " -NoNewline; Write-Host $authPath -ForegroundColor Gray
+  if (-not [string]::IsNullOrWhiteSpace($Model)) {
+    Write-Host "  Primary Model:   " -NoNewline; Write-Host $Model -ForegroundColor White
+    Write-Host "  Subagent Model:  " -NoNewline; Write-Host $Model -ForegroundColor White
+  }
+  Write-Host "  Wire API:        " -NoNewline; Write-Host "responses" -ForegroundColor Gray
 }
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "Status: Successfully configured!" -ForegroundColor Green
