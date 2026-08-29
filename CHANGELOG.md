@@ -1,3 +1,8 @@
+# v0.5.87 (2026-08-30)
+
+## Fixes
+- **Dashboard**: restore missing `checkingOmp` and `applying` component state in `OmpToolCard` to fix React runtime ReferenceError crash on `/dashboard/cli-tools/omp`
+
 # v0.5.86 (2026-08-30)
 
 ## Fixes

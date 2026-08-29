@@ -104,6 +104,8 @@ export default function OmpToolCard({
 }) {
   const { getCaps } = useModelCaps();
   const [ompStatus, setOmpStatus] = useState(initialStatus || null);
+  const [checkingOmp, setCheckingOmp] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -880,6 +882,7 @@ ${modelEntries}`;
                   size="sm"
                   onClick={handleApplySettings}
                   disabled={!selectedModel && selectedModels.length === 0}
+                  loading={applying}
                 >
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
                 </Button>
