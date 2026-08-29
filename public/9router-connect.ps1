@@ -461,9 +461,70 @@ else {
   Write-JsonObject $authPath $auth
   $path = $configPath
 }
-
-"Configured ${Tool}: $path"
-"Remote endpoint: $BaseUrl"
-if (-not [string]::IsNullOrWhiteSpace($Model)) {
-  "Model: $Model"
+Write-Host ""
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "             9Router Configuration Summary" -ForegroundColor Cyan
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "Tool:            " -NoNewline; Write-Host $Tool -ForegroundColor Yellow
+Write-Host "Endpoint:        " -NoNewline; Write-Host $BaseUrl -ForegroundColor Green
+Write-Host "Config Path:     " -NoNewline; Write-Host $path -ForegroundColor Gray
+if ($Tool -eq "omp") {
+  Write-Host "Config Roles:    " -NoNewline; Write-Host $configPath -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "--- Model Roles ---" -ForegroundColor Cyan
+  Write-Host "  Primary/Default: " -NoNewline; Write-Host $defaultModel -ForegroundColor White
+  if (-not [string]::IsNullOrWhiteSpace($SmolModel)) {
+    Write-Host "  Smol (Fast):     " -NoNewline; Write-Host $SmolModel -ForegroundColor White
+  }
+  if (-not [string]::IsNullOrWhiteSpace($SlowModel)) {
+    Write-Host "  Slow (Reasoning):" -NoNewline; Write-Host $SlowModel -ForegroundColor White
+  }
+  if (-not [string]::IsNullOrWhiteSpace($PlanModel)) {
+    Write-Host "  Plan:            " -NoNewline; Write-Host $PlanModel -ForegroundColor White
+  }
+  if ($null -ne $subagents) {
+    Write-Host ""
+    Write-Host "--- Subagent Overrides ---" -ForegroundColor Cyan
+    foreach ($prop in $subagents.PSObject.Properties) {
+      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $agentName = $prop.Name.Trim()
+        $agentVal = [string]($prop.Value)
+        Write-Host "  $($agentName.PadRight(16)): " -NoNewline; Write-Host $agentVal -ForegroundColor White
+      }
+    }
+  }
+  if ($uniqueModelIds.Count -gt 0) {
+    Write-Host ""
+    Write-Host "--- Configured Models ($($uniqueModelIds.Count)) ---" -ForegroundColor Cyan
+    foreach ($mid in $uniqueModelIds) {
+      $catModel = $catalogModelsMap[$mid]
+      $ctx = 200000
+      $maxTokens = 8192
+      if ($null -ne $catModel) {
+        if ($null -ne $catModel.context_length -and [int]$catModel.context_length -gt 0) {
+          $ctx = [int]$catModel.context_length
+        } elseif ($null -ne $catModel.capabilities -and $null -ne $catModel.capabilities.contextWindow -and [int]$catModel.capabilities.contextWindow -gt 0) {
+          $ctx = [int]$catModel.capabilities.contextWindow
+        }
+        if ($null -ne $catModel.max_completion_tokens -and [int]$catModel.max_completion_tokens -gt 0) {
+          $maxTokens = [Math]::Min([int]$catModel.max_completion_tokens, 32768)
+        } elseif ($null -ne $catModel.capabilities -and $null -ne $catModel.capabilities.maxOutput -and [int]$catModel.capabilities.maxOutput -gt 0) {
+          $maxTokens = [Math]::Min([int]$catModel.capabilities.maxOutput, 32768)
+        }
+      }
+      $ctxK = [Math]::Round($ctx / 1000)
+      $isPrimary = if ($mid -eq $defaultModel) { " (primary)" } else { "" }
+      Write-Host "  * " -NoNewline -ForegroundColor DarkGray
+      Write-Host "$mid" -NoNewline -ForegroundColor White
+      Write-Host "$isPrimary" -NoNewline -ForegroundColor Yellow
+      Write-Host " [${ctxK}k ctx, ${maxTokens} max out]" -ForegroundColor DarkCyan
+    }
+  }
+} else {
+  if (-not [string]::IsNullOrWhiteSpace($Model)) {
+    Write-Host "Primary Model:   " -NoNewline; Write-Host $Model -ForegroundColor White
+  }
 }
+Write-Host "============================================================" -ForegroundColor Cyan
+Write-Host "Status: Successfully configured!" -ForegroundColor Green
+Write-Host ""

@@ -501,12 +501,43 @@ else:
     write_json(auth_path, auth)
     path = config_path
 
-print(f"Configured {tool}: {path}")
-for saved in backups:
-    print(f"Backup: {saved}")
+    print("\n" + "=" * 60)
+    print("             9Router Configuration Summary")
+    print("=" * 60)
+    print(f"Tool:            {tool}")
+    print(f"Endpoint:        {base_url}")
+    print(f"Config Path:     {path}")
+    if tool == "omp":
+        print(f"Config Roles:    {config_path}")
+        print("\n--- Model Roles ---")
+        print(f"  Primary/Default: {default_model}")
+        if smol_model:
+            print(f"  Smol (Fast):     {smol_model}")
+        if slow_model:
+            print(f"  Slow (Reasoning):{slow_model}")
+        if plan_model:
+            print(f"  Plan:            {plan_model}")
+        if subagents:
+            print("\n--- Subagent Overrides ---")
+            for agent_name, agent_val in subagents.items():
+                if agent_val and str(agent_val).strip():
+                    print(f"  {agent_name:<16}: {agent_val}")
+        if unique_models:
+            print(f"\n--- Configured Models ({len(unique_models)}) ---")
+            for mid in unique_models:
+                cat_model = catalog_models_map.get(mid, {})
+                caps = cat_model.get("capabilities") or {}
+                ctx = cat_model.get("context_length") or caps.get("contextWindow") or 200000
+                max_out = min(cat_model.get("max_completion_tokens") or caps.get("maxOutput") or 8192, 32768)
+                ctx_k = round(ctx / 1000)
+                is_primary = " (primary)" if mid == default_model else ""
+                print(f"  * {mid}{is_primary} [{ctx_k}k ctx, {max_out} max out]")
+    elif model:
+        print(f"Primary Model:   {model}")
+    if backups:
+        print("\n--- Backups Created ---")
+        for saved in backups:
+            print(f"  * {saved}")
+    print("=" * 60)
+    print("Status: Successfully configured!\n")
 PY
-
-printf 'Remote endpoint: %s\n' "$API_URL"
-if [ -n "$MODEL" ]; then
-  printf 'Model: %s\n' "$MODEL"
-fi

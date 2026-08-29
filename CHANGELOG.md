@@ -1,3 +1,8 @@
+# v0.5.88 (2026-08-30)
+
+## Enhancements
+- **CLI Installers**: add structured configuration summary reports in `.bat`/`.ps1` and `.sh`/`.command` installers detailing the tool, endpoint, roles (default/smol/slow/plan), subagents, and configured models with their context windows and token output limits
+
 # v0.5.87 (2026-08-30)
 
 ## Fixes
