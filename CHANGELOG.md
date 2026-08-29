@@ -1,3 +1,8 @@
+# v0.5.90 (2026-08-30)
+
+## Tests
+- **RTK**: add unit tests for ponytail system prompt injection across OpenAI, Claude, and Gemini formats (`tests/unit/ponytail-injection.test.js`)
+
 # v0.5.89 (2026-08-30)
 
 ## Enhancements
