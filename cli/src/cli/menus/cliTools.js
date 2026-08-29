@@ -198,6 +198,9 @@ async function buildCodexHeader() {
   const modelMatch = config && config.match(/^model\s*=\s*"([^"]+)"/m);
   const baseUrl = saved?.baseUrl || (baseUrlMatch ? baseUrlMatch[1] : "");
   const model = saved?.model || (modelMatch ? modelMatch[1] : "");
+  const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
+  if (baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${baseUrl}${COLORS.reset}`);
+  if (model)   lines.push(`Model:    ${COLORS.dim}${model}${COLORS.reset}`);
   return lines.join("\n");
 }
 
@@ -283,6 +286,9 @@ async function buildDroidHeader() {
   const custom = settings?.customModels?.find(m => m.id === "custom:9Router-0");
   const baseUrl = saved?.baseUrl || custom?.baseUrl;
   const model = saved?.activeModel || saved?.model || saved?.models?.[0] || custom?.model;
+  const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
+  if (baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${baseUrl}${COLORS.reset}`);
+  if (model)   lines.push(`Model:    ${COLORS.dim}${model}${COLORS.reset}`);
   return lines.join("\n");
 }
 
@@ -546,6 +552,9 @@ async function buildHermesHeader() {
   const modelObj = settings?.model || {};
   const baseUrl = saved?.baseUrl || modelObj.base_url;
   const model = saved?.model || modelObj.default;
+  const lines = [`Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
+  if (baseUrl) lines.push(`Endpoint: ${COLORS.cyan}${baseUrl}${COLORS.reset}`);
+  if (model)   lines.push(`Model:    ${COLORS.dim}${model}${COLORS.reset}`);
   return lines.join("\n");
 }
 
@@ -611,10 +620,11 @@ async function buildOmpHeader() {
   const lines = [`  Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
   if (omp?.baseUrl) lines.push(`  Endpoint: ${COLORS.cyan}${omp.baseUrl}${COLORS.reset}`);
   if (omp?.activeModel) lines.push(`  Primary:  ${COLORS.dim}${omp.activeModel}${COLORS.reset}`);
+  const models = Array.isArray(omp?.models) && omp.models.length > 0 ? omp.models : [];
+  if (models.length > 0) lines.push(`  Models:   ${COLORS.dim}${models.join(", ")}${COLORS.reset}`);
   if (omp?.smolModel) lines.push(`  Smol:     ${COLORS.dim}${omp.smolModel}${COLORS.reset}`);
   if (omp?.slowModel) lines.push(`  Slow:     ${COLORS.dim}${omp.slowModel}${COLORS.reset}`);
   return lines.join("\n");
-}
 
 async function ompQuickSetup(port) {
   const { endpoint } = await getEndpoint(port);
@@ -627,24 +637,33 @@ async function ompQuickSetup(port) {
   }
 
   const settingsResult = await api.getCliToolSettings("omp");
-  const defaultModel = settingsResult.data?.savedConfig?.activeModel || settingsResult.data?.savedConfig?.model || "";
+  const defaultModel = settingsResult.data?.savedConfig?.activeModel || settingsResult.data?.savedConfig?.model || settingsResult.data?.savedConfig?.models?.[0] || "";
   const model = await selectModelFromList("Select Primary Model for Oh My Pi", defaultModel, { excludeCombos: true });
   if (!model) return;
+
+  const models = [model];
+  while (true) {
+    const more = await confirm(`Add another model to Oh My Pi? (current: ${models.length})`);
+    if (!more) break;
+    const next = await selectModelFromList(`Add Model #${models.length + 1}`, models.join(", "), { excludeCombos: true });
+    if (!next) break;
+    if (!models.includes(next)) models.push(next);
+  }
 
   const saved = settingsResult.data?.savedConfig || {};
   const result = await api.applyCliToolSettings("omp", {
     baseUrl: endpoint,
     apiKey,
     model,
-    models: saved.models || [model],
+    models,
     activeModel: model,
     smolModel: saved.smolModel || "",
     slowModel: saved.slowModel || "",
     planModel: saved.planModel || "",
     subagentModels: saved.subagentModels || {},
   });
+  showStatus(result.success ? "Oh My Pi setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");
   await pause();
-}
 
 async function ompReset() {
   const result = await api.resetCliToolSettings("omp");

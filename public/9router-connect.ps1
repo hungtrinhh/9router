@@ -131,11 +131,19 @@ if ([string]::IsNullOrWhiteSpace($Model) -and -not $NoPrompt) {
 # Mirror the dashboard Apply behavior: when no model is configured, write the
 # connection without model fields instead of prompting for one.
 $catalogModelIds = @()
+$catalogModelsMap = @{}
 if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
   try {
     $headers = @{ Authorization = "Bearer $ApiKey" }
     $catalog = Invoke-RestMethod -Uri "$BaseUrl/models" -Headers $headers -Method Get
-    $catalogModelIds = @($catalog.data | ForEach-Object { $_.id })
+    if ($null -ne $catalog.data) {
+      foreach ($item in $catalog.data) {
+        if (-not [string]::IsNullOrWhiteSpace($item.id)) {
+          $catalogModelIds += $item.id
+          $catalogModelsMap[$item.id] = $item
+        }
+      }
+    }
     if (-not [string]::IsNullOrWhiteSpace($Model) -and $catalogModelIds.Count -gt 0 -and $Model -notin $catalogModelIds) {
       throw "Model '$Model' was not returned by /v1/models"
     }
@@ -278,15 +286,46 @@ elseif ($Tool -eq "omp") {
   $modelEntries = New-Object System.Collections.Generic.List[string]
   foreach ($mid in $uniqueModelIds) {
     $escMid = $mid.Replace("\", "\\").Replace('"', '\"')
+    $catModel = $catalogModelsMap[$mid]
+    $ctx = 200000
+    $maxTokens = 8192
+    $reasoning = $true
+    $hasVision = $true
+
+    if ($null -ne $catModel) {
+      if ($null -ne $catModel.context_length -and [int]$catModel.context_length -gt 0) {
+        $ctx = [int]$catModel.context_length
+      } elseif ($null -ne $catModel.capabilities -and $null -ne $catModel.capabilities.contextWindow -and [int]$catModel.capabilities.contextWindow -gt 0) {
+        $ctx = [int]$catModel.capabilities.contextWindow
+      }
+      if ($null -ne $catModel.max_completion_tokens -and [int]$catModel.max_completion_tokens -gt 0) {
+        $maxTokens = [Math]::Min([int]$catModel.max_completion_tokens, 32768)
+      } elseif ($null -ne $catModel.capabilities -and $null -ne $catModel.capabilities.maxOutput -and [int]$catModel.capabilities.maxOutput -gt 0) {
+        $maxTokens = [Math]::Min([int]$catModel.capabilities.maxOutput, 32768)
+      }
+      if ($null -ne $catModel.capabilities -and $null -ne $catModel.capabilities.reasoning) {
+        $reasoning = [bool]$catModel.capabilities.reasoning
+      }
+      if ($null -ne $catModel.capabilities -and $null -ne $catModel.capabilities.vision) {
+        $hasVision = [bool]$catModel.capabilities.vision
+      }
+    }
+
+    $inputBlock = if ($hasVision) {
+      "        input:`r`n          - `"text`"`r`n          - `"image`""
+    } else {
+      "        input:`r`n          - `"text`""
+    }
+
+    $reasoningStr = if ($reasoning) { "true" } else { "false" }
+
     $modelEntries.Add(@"
       - id: "$escMid"
         name: "$escMid"
-        contextWindow: 200000
-        maxTokens: 8192
-        reasoning: true
-        input:
-          - "text"
-          - "image"
+        contextWindow: $ctx
+        maxTokens: $maxTokens
+        reasoning: $reasoningStr
+$inputBlock
 "@)
   }
   $modelsYamlString = $modelEntries -join "`r`n"

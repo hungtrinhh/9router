@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/components";
+import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
 import ApiKeySelect from "./ApiKeySelect";
 import BashSetupButton from "./BashSetupButton";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
-
 const ENDPOINT = "/api/cli-tools/omp-settings";
 
 const OMP_SUBAGENT_TYPES = [
@@ -102,18 +102,20 @@ export default function OmpToolCard({
   tailscaleUrl,
   canManageLocalSettings = true,
 }) {
-  const initialActiveModel =
-    initialStatus?.omp?.activeModel || initialStatus?.omp?.models?.[0] || initialStatus?.savedConfig?.activeModel || initialStatus?.savedConfig?.model || "";
+  const { getCaps } = useModelCaps();
   const [ompStatus, setOmpStatus] = useState(initialStatus || null);
-  const [checkingOmp, setCheckingOmp] = useState(false);
-  const [applying, setApplying] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState(null);
 
   const [selectedApiKey, setSelectedApiKey] = useState(
     initialStatus?.omp?.apiKey || apiKeys?.[0]?.key || ""
   );
-  const [selectedModel, setSelectedModel] = useState(initialActiveModel);
+  const [selectedModels, setSelectedModels] = useState(
+    initialStatus?.omp?.models || initialStatus?.savedConfig?.models || []
+  );
+  const [selectedModel, setSelectedModel] = useState(
+    initialStatus?.omp?.activeModel || initialStatus?.omp?.models?.[0] || initialStatus?.savedConfig?.activeModel || initialStatus?.savedConfig?.model || ""
+  );
   const [smolModel, setSmolModel] = useState(initialStatus?.omp?.smolModel || "");
   const [slowModel, setSlowModel] = useState(initialStatus?.omp?.slowModel || "");
   const [planModel, setPlanModel] = useState(initialStatus?.omp?.planModel || "");
@@ -121,12 +123,13 @@ export default function OmpToolCard({
     initialStatus?.omp?.subagentModels || {}
   );
 
+  const [modalOpen, setModalOpen] = useState(false);
   const [modalTarget, setModalTarget] = useState(null); // 'default' | 'smol' | 'slow' | 'plan' | subagent ID
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
   const hasFetchedStatus = useRef(Boolean(initialStatus));
-
+  const hasHydratedOnce = useRef(false);
   const configuredUrl = ompStatus?.omp?.baseUrl || ompStatus?.settings?.provider?.baseUrl;
   const configStatus = !ompStatus?.installed
     ? null
@@ -140,6 +143,10 @@ export default function OmpToolCard({
 
   const hydrateForm = useCallback(
     (status) => {
+      const models = status?.omp?.models || status?.savedConfig?.models || [];
+      if (Array.isArray(models)) {
+        setSelectedModels(models);
+      }
       const active = status?.omp?.activeModel || status?.omp?.models?.[0] || status?.savedConfig?.activeModel || status?.savedConfig?.model || "";
       if (active) setSelectedModel(active);
       if (status?.omp?.smolModel !== undefined || status?.savedConfig?.smolModel !== undefined) {
@@ -193,11 +200,15 @@ export default function OmpToolCard({
 
   useEffect(() => {
     if (isExpanded) {
-      if (!hasFetchedStatus.current) checkOmpStatus({ hydrate: true });
+      if (!hasFetchedStatus.current) {
+        checkOmpStatus({ hydrate: true });
+      } else if (!hasHydratedOnce.current && initialStatus) {
+        hasHydratedOnce.current = true;
+        hydrateForm(initialStatus);
+      }
       fetchModelAliases();
     }
-  }, [isExpanded]);
-
+  }, [isExpanded, checkOmpStatus, fetchModelAliases, initialStatus, hydrateForm]);
   const normalizeLocalhost = (url) => url.replace("://localhost", "://127.0.0.1");
 
   const getLocalBaseUrl = () => {
@@ -220,6 +231,7 @@ export default function OmpToolCard({
   const debounceTimerRef = useRef(null);
 
   const handleApplySettings = async (overrides = {}) => {
+    const currentSelectedModels = "selectedModels" in overrides ? overrides.selectedModels : selectedModels;
     const currentSelectedModel = "selectedModel" in overrides ? overrides.selectedModel : selectedModel;
     const currentSmolModel = "smolModel" in overrides ? overrides.smolModel : smolModel;
     const currentSlowModel = "slowModel" in overrides ? overrides.slowModel : slowModel;
@@ -236,11 +248,18 @@ export default function OmpToolCard({
       }
     }
 
-    const effectivePrimaryModel = currentSelectedModel?.trim() || currentSmolModel?.trim() || currentSlowModel?.trim() || Object.values(mappedSubagents)[0] || "";
+    const effectivePrimaryModel =
+      currentSelectedModel?.trim() ||
+      currentSelectedModels?.[0] ||
+      currentSmolModel?.trim() ||
+      currentSlowModel?.trim() ||
+      Object.values(mappedSubagents)[0] ||
+      "";
 
-    // Collect all distinct models selected across roles & subagents
+    // Collect all distinct models selected across models array, roles & subagents
     const allModels = Array.from(
       new Set([
+        ...(Array.isArray(currentSelectedModels) ? currentSelectedModels : []),
         effectivePrimaryModel,
         currentSmolModel?.trim(),
         currentSlowModel?.trim(),
@@ -252,7 +271,6 @@ export default function OmpToolCard({
     if (allModels.length === 0) {
       return;
     }
-
     setApplying(true);
     setMessage(null);
     try {
@@ -308,6 +326,7 @@ export default function OmpToolCard({
       const data = await res.json();
       if (res.ok) {
         setMessage({ type: "success", text: "Settings reset successfully!" });
+        setSelectedModels([]);
         setSelectedModel("");
         setSmolModel("");
         setSlowModel("");
@@ -376,12 +395,13 @@ export default function OmpToolCard({
         ? "sk_9router"
         : "<API_KEY_FROM_DASHBOARD>";
 
-    const activeM = selectedModel || "claude-sonnet-4-6";
+    const activeM = selectedModel || selectedModels[0] || "claude-sonnet-4-6";
     const smolM = smolModel || "claude-haiku-4-5";
     const slowM = slowModel || "claude-opus-4-6";
 
     const allModelsList = Array.from(
       new Set([
+        ...selectedModels,
         activeM,
         smolM,
         slowM,
@@ -389,16 +409,20 @@ export default function OmpToolCard({
         ...Object.values(subagentModels).map((m) => m?.trim()).filter(Boolean),
       ].filter(Boolean))
     );
-
     const modelEntries = allModelsList
-      .map(
-        (m) => `      - id: "${m}"
+      .map((m) => {
+        const caps = getCaps(m);
+        const ctx = caps?.contextWindow || 200000;
+        const maxOut = Math.min(caps?.maxOutput || 8192, 32768);
+        const isReasoning = Boolean(caps?.reasoning);
+        const inputs = caps?.vision ? '["text", "image"]' : '["text"]';
+        return `      - id: "${m}"
         name: "${m}"
-        contextWindow: 200000
-        maxTokens: 8192
-        reasoning: true
-        input: ["text", "image"]`
-      )
+        contextWindow: ${ctx}
+        maxTokens: ${maxOut}
+        reasoning: ${isReasoning}
+        input: ${inputs}`;
+      })
       .join("\n");
 
     const modelsYaml = `providers:
@@ -525,7 +549,8 @@ ${modelEntries}`;
                     tool="omp"
                     baseUrl={getEffectiveBaseUrl()}
                     apiKey={selectedApiKey}
-                    model={selectedModel || "claude-sonnet-4-6"}
+                    model={selectedModel || selectedModels[0] || "claude-sonnet-4-6"}
+                    models={selectedModels}
                     smolModel={smolModel}
                     slowModel={slowModel}
                     planModel={planModel}
@@ -627,12 +652,97 @@ ${modelEntries}`;
                     cloudEnabled={cloudEnabled}
                   />
                 </div>
+                {/* Models Section */}
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8.5rem_auto_1fr] sm:items-start sm:gap-2">
+                  <span className="w-34 shrink-0 text-sm font-semibold text-text-main text-right pt-1">
+                    Models
+                  </span>
+                  <span className="material-symbols-outlined text-text-muted text-[14px] mt-1.5">
+                    arrow_forward
+                  </span>
+                  <div className="flex-1 flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-1.5 min-h-[28px] px-2 py-1.5 bg-surface rounded border border-border">
+                      {selectedModels.length === 0 ? (
+                        <span className="text-xs text-text-muted">No models selected</span>
+                      ) : (
+                        selectedModels.map((model) => (
+                          <span
+                            key={model}
+                            onClick={() => {
+                              if (model === selectedModel) {
+                                setSelectedModel("");
+                                handleApplySettings({ selectedModel: "" });
+                              } else {
+                                setSelectedModel(model);
+                                handleApplySettings({ selectedModel: model });
+                              }
+                            }}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs cursor-pointer transition-colors ${
+                              model === selectedModel
+                                ? "bg-primary/10 text-primary border border-primary"
+                                : "bg-black/5 dark:bg-white/5 text-text-muted border border-transparent hover:border-border"
+                            }`}
+                            title={
+                              model === selectedModel
+                                ? "Click to clear active model"
+                                : "Click to set as primary active model"
+                            }
+                          >
+                            {model === selectedModel && (
+                              <span className="material-symbols-outlined text-[10px]">star</span>
+                            )}
+                            {model}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const newModels = selectedModels.filter((m) => m !== model);
+                                const nextActive = selectedModel === model ? (newModels[0] || "") : selectedModel;
+                                setSelectedModels(newModels);
+                                setSelectedModel(nextActive);
+                                handleApplySettings({ selectedModels: newModels, selectedModel: nextActive });
+                              }}
+                              className="ml-0.5 hover:text-red-500"
+                            >
+                              <span className="material-symbols-outlined text-[12px]">close</span>
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[8.5rem_auto_1fr_auto] sm:items-center sm:gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setModalOpen(true)}
+                        disabled={!hasActiveProviders}
+                        className={`px-2 py-1 rounded border text-xs transition-colors ${
+                          hasActiveProviders
+                            ? "bg-surface border-border text-text-main hover:border-primary cursor-pointer"
+                            : "opacity-50 cursor-not-allowed border-border"
+                        }`}
+                      >
+                        Add Model
+                      </button>
+                      <span className="text-xs text-text-muted">
+                        {selectedModels.length > 0 && selectedModel ? (
+                          <>
+                            Active: <span className="text-primary">{selectedModel}</span>
+                          </>
+                        ) : selectedModels.length > 0 ? (
+                          <span className="text-yellow-500">Click a model to set/clear active</span>
+                        ) : (
+                          "Select models to add"
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Primary (Default) Model */}
                 <ModelField
                   label="Primary Model"
                   value={selectedModel}
-                  placeholder="claude-sonnet-4-6"
+                  placeholder={selectedModels[0] || "claude-sonnet-4-6"}
                   onChange={(val) => {
                     setSelectedModel(val);
                     debouncedSave({ selectedModel: val });
@@ -744,10 +854,7 @@ ${modelEntries}`;
                   <p className="text-xs font-medium text-blue-600 dark:text-blue-400">CLI Usage:</p>
                   <code className="text-xs font-mono text-text-muted">omp</code>
                   <code className="text-xs font-mono text-text-muted">
-                    omp --model 9router/{selectedModel || "claude-sonnet-4-6"}
-                  </code>
-                  <code className="text-xs font-mono text-text-muted">
-                    omp models 9router
+                    omp --model 9router/{selectedModel || selectedModels[0] || "claude-sonnet-4-6"}
                   </code>
                 </div>
               </div>
@@ -772,8 +879,7 @@ ${modelEntries}`;
                   variant="primary"
                   size="sm"
                   onClick={handleApplySettings}
-                  disabled={!selectedModel}
-                  loading={applying}
+                  disabled={!selectedModel && selectedModels.length === 0}
                 >
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
                 </Button>
@@ -794,8 +900,8 @@ ${modelEntries}`;
                   tool="omp"
                   baseUrl={getEffectiveBaseUrl()}
                   apiKey={selectedApiKey}
-                  model={selectedModel || "claude-sonnet-4-6"}
-                  smolModel={smolModel}
+                  model={selectedModel || selectedModels[0] || "claude-sonnet-4-6"}
+                  models={selectedModels}
                   slowModel={slowModel}
                   planModel={planModel}
                   subagentModels={subagentModels}
@@ -816,6 +922,37 @@ ${modelEntries}`;
           activeProviders={activeProviders}
           modelAliases={modelAliases}
           title={`Select ${getTargetTitle()} for Oh My Pi`}
+        />
+      )}
+
+      {modalOpen && (
+        <ModelSelectModal
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onSelect={(model) => {
+            if (!selectedModels.includes(model.value)) {
+              const next = [...selectedModels, model.value];
+              const nextActive = selectedModel || model.value;
+              setSelectedModels(next);
+              if (!selectedModel) setSelectedModel(model.value);
+              handleApplySettings({ selectedModels: next, selectedModel: nextActive });
+            }
+          }}
+          onDeselect={(model) => {
+            const remaining = selectedModels.filter((m) => m !== model.value);
+            const nextActive = selectedModel === model.value ? (remaining[0] || "") : selectedModel;
+            setSelectedModels(remaining);
+            if (selectedModel === model.value) {
+              setSelectedModel(remaining[0] || "");
+            }
+            handleApplySettings({ selectedModels: remaining, selectedModel: nextActive });
+          }}
+          selectedModel={null}
+          activeProviders={activeProviders}
+          modelAliases={modelAliases}
+          addedModelValues={selectedModels}
+          closeOnSelect={false}
+          title="Add Model for Oh My Pi"
         />
       )}
 

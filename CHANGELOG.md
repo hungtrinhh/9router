@@ -1,3 +1,9 @@
+# v0.5.86 (2026-08-30)
+
+## Fixes
+- **CLI Installers**: dynamically resolve model context window, max completion tokens, and modalities from `/v1/models` in PowerShell (`.ps1`/`.bat`) and Bash (`.sh`/`.command`) installer scripts instead of hardcoding `200000`
+- **Dashboard**: use `useModelCaps` in Oh My Pi (`OmpToolCard`) manual YAML generation to accurately reflect model context window and token limits
+
 # v0.5.85 (2026-08-27)
 
 ## Fixes

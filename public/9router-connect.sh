@@ -331,6 +331,7 @@ elif tool == "omp":
                 all_models.append(m.strip())
 
     # Include catalog models if available
+    catalog_models_map = {}
     try:
         import urllib.request
         req = urllib.request.Request(f"{base_url}/models", headers={"Authorization": f"Bearer {api_key}"})
@@ -338,11 +339,12 @@ elif tool == "omp":
             data = json.loads(resp.read().decode("utf-8"))
             for item in data.get("data", []):
                 mid = item.get("id")
-                if mid and mid not in all_models:
-                    all_models.append(mid)
+                if mid:
+                    catalog_models_map[mid] = item
+                    if mid not in all_models:
+                        all_models.append(mid)
     except Exception:
         pass
-
     # Deduplicate preserving order
     seen = set()
     unique_models = []
@@ -357,17 +359,22 @@ elif tool == "omp":
     model_entries = []
     for mid in unique_models:
         esc_mid = mid.replace("\\", "\\\\").replace('"', '\\"')
+        cat_model = catalog_models_map.get(mid, {})
+        caps = cat_model.get("capabilities") or {}
+        ctx = cat_model.get("context_length") or caps.get("contextWindow") or 200000
+        max_out = min(cat_model.get("max_completion_tokens") or caps.get("maxOutput") or 8192, 32768)
+        is_reasoning = "true" if (caps.get("reasoning", True) if caps else True) else "false"
+        has_vision = caps.get("vision", True) if caps else True
+        inputs = '          - "text"\n          - "image"' if has_vision else '          - "text"'
         model_entries.append(
             f'      - id: "{esc_mid}"\n'
             f'        name: "{esc_mid}"\n'
-            f'        contextWindow: 200000\n'
-            f'        maxTokens: 8192\n'
-            f'        reasoning: true\n'
+            f'        contextWindow: {ctx}\n'
+            f'        maxTokens: {max_out}\n'
+            f'        reasoning: {is_reasoning}\n'
             f'        input:\n'
-            f'          - "text"\n'
-            f'          - "image"'
+            f'{inputs}'
         )
-    models_entries_str = "\n".join(model_entries)
 
     nine_router_block = (
         "  9router:\n"
