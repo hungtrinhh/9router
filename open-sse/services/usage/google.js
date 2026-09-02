@@ -161,6 +161,10 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
     if (data.models) {
       // Filter only recommended/important models (must match PROVIDER_MODELS ag ids)
       const importantModels = [
+        'gemini-3.8-flash-high',
+        'gemini-3.8-flash-medium',
+        'gemini-3.8-flash-low',
+        'gemini-3.8-flash',
         'gemini-3.7-flash-high',
         'gemini-3.7-flash-medium',
         'gemini-3.7-flash-low',
@@ -170,14 +174,19 @@ export async function getAntigravityUsage(accessToken, providerSpecificData, pro
         'gemini-3.5-flash-low',
         'gemini-3.5-flash-extra-low',
         'gemini-pro-agent',
+        'gemini-3.1-pro-high',
         'gemini-3.1-pro-low',
+        'gemini-3.1-flash-lite',
         'claude-sonnet-4-6',
         'claude-opus-4-6-thinking',
         'gpt-oss-120b-medium',
+        'gemini-3-flash',
+        'gemini-2.5-pro',
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
         // Image generation models
         'gemini-3.1-flash-image',
       ];
-
       for (const [modelKey, info] of Object.entries(data.models)) {
         // Skip models without quota info
         if (!info.quotaInfo) {

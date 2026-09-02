@@ -1,3 +1,9 @@
+# v0.5.91 (2026-09-02)
+
+## Features & Enhancements
+- **Antigravity**: add full support for Gemini 3.8 Flash (`gemini-3.8-flash-high`, `gemini-3.8-flash-medium`, `gemini-3.8-flash-low`, `gemini-3.8-flash`) and Gemini 3.1 Flash Lite (`gemini-3.1-flash-lite`) with quota tracking, pricing rates, and MITM route aliases
+- **Antigravity**: update registry and CLI menu models to include `gemini-3.1-pro-high` and legacy fallback models (`gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`)
+
 # v0.5.90 (2026-08-30)
 
 ## Tests

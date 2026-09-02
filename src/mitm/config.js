@@ -55,12 +55,13 @@ const MODEL_SYNONYMS = {
     "gemini-3.5-flash-high": "gemini-3-flash-agent",
     "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
     "gemini-3.5-flash-extra-low": "gemini-3.5-flash-extra-low",
-     "gemini-3.7-flash-high": "gemini-3.7-flash-high",
+    "gemini-3.7-flash-high": "gemini-3.7-flash-high",
     "gemini-3.7-flash-medium": "gemini-3.7-flash-medium",
     "gemini-3.7-flash-low": "gemini-3.7-flash-low",
     "gemini-3.1-pro-high": "gemini-pro-agent",
     "gemini-3-pro-high": "gemini-pro-agent",
     "gemini-3-pro-low": "gemini-3.1-pro-low",
+    "gemini-3.1-flash-lite": "gemini-3.1-flash-lite",
   },
 };
 
@@ -68,6 +69,7 @@ const MODEL_SYNONYMS = {
 // Order matters: more specific patterns first. Catches AG renamed variants (e.g. gemini-pro-agent)
 const MODEL_PATTERNS = {
   antigravity: [
+    { match: /flash.*lite|lite.*flash/i,                           alias: "gemini-3.1-flash-lite" },
     { match: /flash.*extra.*low|extra.*low.*flash|flash.*low|low.*flash/i, alias: "gemini-3.5-flash-extra-low" },
     { match: /flash.*medium|medium.*flash/i,                       alias: "gemini-3.5-flash-low" },
     { match: /flash.*agent|agent.*flash|flash/i,                   alias: "gemini-3-flash-agent" },
