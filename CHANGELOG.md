@@ -1,3 +1,8 @@
+# v0.5.95 (2026-09-03)
+
+## Features & CI
+- **CI / Quality**: add automated pre-release code integrity verification (`verify:release`) scanning syntax, Babel AST trees, Next.js server actions, and variable references before builds
+
 # v0.5.94 (2026-09-03)
 
 ## Fixes
