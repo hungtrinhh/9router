@@ -17,6 +17,7 @@ param(
   [string]$PlanModel = "",
 
   [string]$ModelRolesJson = "",
+  [string]$ModelRolesBase64 = "",
 
   [string]$SubagentModelsJson = "",
   [string[]]$Models = @(),
@@ -225,6 +226,12 @@ elseif ($Tool -eq "omp") {
 
   $defaultModel = if (-not [string]::IsNullOrWhiteSpace($Model)) { $Model.Trim() } else { "claude-sonnet-4-6" }
   $parsedRoles = $null
+  if (-not [string]::IsNullOrWhiteSpace($ModelRolesBase64)) {
+    try {
+      $bytes = [Convert]::FromBase64String($ModelRolesBase64.Trim())
+      $ModelRolesJson = [System.Text.Encoding]::UTF8.GetString($bytes)
+    } catch {}
+  }
   if (-not [string]::IsNullOrWhiteSpace($ModelRolesJson)) {
     try {
       $parsedRoles = $ModelRolesJson | ConvertFrom-Json
@@ -240,7 +247,6 @@ elseif ($Tool -eq "omp") {
       }
     }
   }
-
   $allModelIds = New-Object System.Collections.Generic.List[string]
   $allModelIds.Add($defaultModel)
 
@@ -352,14 +358,6 @@ $modelsYamlString
   $escPlan = if (-not [string]::IsNullOrWhiteSpace($PlanModel)) { $PlanModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { "" }
   $roleLines = New-Object System.Collections.Generic.List[string]
   $roleLines.Add("modelRoles:")
-
-  $parsedRoles = $null
-  if (-not [string]::IsNullOrWhiteSpace($ModelRolesJson)) {
-    try {
-      $parsedRoles = $ModelRolesJson | ConvertFrom-Json
-    } catch {}
-  }
-
   if ($null -ne $parsedRoles) {
     foreach ($prop in $parsedRoles.PSObject.Properties) {
       if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {

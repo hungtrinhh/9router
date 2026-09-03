@@ -52,7 +52,9 @@ export default function BashSetupButton({
         if (slowModel) modelArgs += ` -SlowModel ${psQuote(slowModel)}`;
         if (planModel) modelArgs += ` -PlanModel ${psQuote(planModel)}`;
         if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
-          modelArgs += ` -ModelRolesJson ${psQuote(JSON.stringify(modelRoles))}`;
+          const rolesJson = JSON.stringify(modelRoles);
+          const rolesB64 = typeof window !== "undefined" && window.btoa ? window.btoa(unescape(encodeURIComponent(rolesJson))) : Buffer.from(rolesJson).toString("base64");
+          modelArgs += ` -ModelRolesBase64 ${psQuote(rolesB64)}`;
         }
         if (Array.isArray(models) && models.length > 0) {
           const modelsJoined = models.map((m) => psQuote(m)).join(",");

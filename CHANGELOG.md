@@ -1,3 +1,8 @@
+# v0.5.98 (2026-09-03)
+
+## Fixes
+- **CLI Installers**: encode `modelRoles` as Base64 in Windows `.bat` installer to prevent `cmd.exe` stripping double quotes, ensuring all 10 OMP model roles apply correctly
+
 # v0.5.97 (2026-09-03)
 
 ## Fixes & Enhancements
