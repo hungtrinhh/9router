@@ -224,17 +224,36 @@ elseif ($Tool -eq "omp") {
   Backup-ConfigFile $configPath
 
   $defaultModel = if (-not [string]::IsNullOrWhiteSpace($Model)) { $Model.Trim() } else { "claude-sonnet-4-6" }
-  $subagents = $null
-  if (-not [string]::IsNullOrWhiteSpace($SubagentModelsJson)) {
+  $parsedRoles = $null
+  if (-not [string]::IsNullOrWhiteSpace($ModelRolesJson)) {
     try {
-      $subagents = $SubagentModelsJson | ConvertFrom-Json
-    } catch {
-      $subagents = $null
+      $parsedRoles = $ModelRolesJson | ConvertFrom-Json
+    } catch {}
+  }
+  if ($null -ne $parsedRoles) {
+    foreach ($prop in $parsedRoles.PSObject.Properties) {
+      if ($prop.Name.Trim() -eq "default" -and -not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $cleanDef = [string]($prop.Value) -replace "^9router/", ""
+        if (-not [string]::IsNullOrWhiteSpace($cleanDef)) {
+          $defaultModel = $cleanDef.Trim()
+        }
+      }
     }
   }
 
   $allModelIds = New-Object System.Collections.Generic.List[string]
   $allModelIds.Add($defaultModel)
+
+  if ($null -ne $parsedRoles) {
+    foreach ($prop in $parsedRoles.PSObject.Properties) {
+      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $cleanRoleVal = [string]($prop.Value) -replace "^9router/", ""
+        if (-not [string]::IsNullOrWhiteSpace($cleanRoleVal)) {
+          $allModelIds.Add($cleanRoleVal.Trim())
+        }
+      }
+    }
+  }
 
   if (-not [string]::IsNullOrWhiteSpace($SmolModel) -and $SmolModel.Trim()) {
     $allModelIds.Add($SmolModel.Trim())
@@ -245,19 +264,6 @@ elseif ($Tool -eq "omp") {
   if (-not [string]::IsNullOrWhiteSpace($PlanModel) -and $PlanModel.Trim()) {
     $allModelIds.Add($PlanModel.Trim())
   }
-
-  if ($null -ne $subagents) {
-    foreach ($prop in $subagents.PSObject.Properties) {
-      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
-        $cleanSubVal = [string]($prop.Value)
-        $cleanSubVal = $cleanSubVal -replace "^9router/", ""
-        if (-not [string]::IsNullOrWhiteSpace($cleanSubVal)) {
-          $allModelIds.Add($cleanSubVal.Trim())
-        }
-      }
-    }
-  }
-
   if ($null -ne $Models -and $Models.Count -gt 0) {
     foreach ($m in $Models) {
       if (-not [string]::IsNullOrWhiteSpace($m)) {
@@ -417,9 +423,7 @@ $modelsYamlString
   } else {
     $cleanedCfg = [Regex]::Replace($configContent, "(?m)^\s*\{\}\s*$", "")
     $cleanedCfg = [Regex]::Replace($cleanedCfg, "(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
-    if ($subagentsBlock) {
-      $cleanedCfg = [Regex]::Replace($cleanedCfg, "(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
-    }
+    $cleanedCfg = [Regex]::Replace($cleanedCfg, "(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\z)", "").Trim()
     $blocks = New-Object System.Collections.Generic.List[string]
     $blocks.Add($rolesBlock)
     if ($subagentsBlock) {
@@ -490,16 +494,25 @@ Write-Host "Config Path:     " -NoNewline; Write-Host $path -ForegroundColor Gra
 if ($Tool -eq "omp") {
   Write-Host "Config Roles:    " -NoNewline; Write-Host $configPath -ForegroundColor Gray
   Write-Host ""
-  Write-Host "--- Model Roles ---" -ForegroundColor Cyan
-  Write-Host "  Primary/Default: " -NoNewline; Write-Host $defaultModel -ForegroundColor White
-  if (-not [string]::IsNullOrWhiteSpace($SmolModel)) {
-    Write-Host "  Smol (Fast):     " -NoNewline; Write-Host $SmolModel -ForegroundColor White
-  }
-  if (-not [string]::IsNullOrWhiteSpace($SlowModel)) {
-    Write-Host "  Slow (Reasoning):" -NoNewline; Write-Host $SlowModel -ForegroundColor White
-  }
-  if (-not [string]::IsNullOrWhiteSpace($PlanModel)) {
-    Write-Host "  Plan:            " -NoNewline; Write-Host $PlanModel -ForegroundColor White
+  if ($null -ne $parsedRoles) {
+    foreach ($prop in $parsedRoles.PSObject.Properties) {
+      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $rName = $prop.Name.Trim()
+        $rVal = [string]($prop.Value) -replace "^9router/", ""
+        Write-Host "  $($rName.PadRight(16)): " -NoNewline; Write-Host $rVal -ForegroundColor White
+      }
+    }
+  } else {
+    Write-Host "  Primary/Default: " -NoNewline; Write-Host $defaultModel -ForegroundColor White
+    if (-not [string]::IsNullOrWhiteSpace($SmolModel)) {
+      Write-Host "  Smol (Fast):     " -NoNewline; Write-Host $SmolModel -ForegroundColor White
+    }
+    if (-not [string]::IsNullOrWhiteSpace($SlowModel)) {
+      Write-Host "  Slow (Reasoning):" -NoNewline; Write-Host $SlowModel -ForegroundColor White
+    }
+    if (-not [string]::IsNullOrWhiteSpace($PlanModel)) {
+      Write-Host "  Plan:            " -NoNewline; Write-Host $PlanModel -ForegroundColor White
+    }
   }
   if ($null -ne $subagents) {
     Write-Host ""

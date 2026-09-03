@@ -319,7 +319,26 @@ elif tool == "omp":
         except Exception:
             subagents = {}
 
+    model_roles_raw = os.environ.get("NINEROUTER_CONNECT_MODEL_ROLES", "").strip()
+    parsed_roles = {}
+    if model_roles_raw:
+        try:
+            parsed_roles = json.loads(model_roles_raw)
+        except Exception:
+            pass
+
+    if parsed_roles and isinstance(parsed_roles, dict) and parsed_roles.get("default"):
+        clean_def = str(parsed_roles["default"]).strip().replace("9router/", "")
+        if clean_def:
+            default_model = clean_def
+
     all_models = [default_model]
+    if parsed_roles and isinstance(parsed_roles, dict):
+        for r_val in parsed_roles.values():
+            if isinstance(r_val, str) and r_val.strip():
+                clean_r = r_val.strip().replace("9router/", "")
+                if clean_r:
+                    all_models.append(clean_r)
     if smol_model:
         all_models.append(smol_model)
     if slow_model:
@@ -396,13 +415,7 @@ elif tool == "omp":
     esc_slow = slow_model.replace("\\", "\\\\").replace('"', '\\"') if slow_model else esc_default
     esc_plan = plan_model.replace("\\", "\\\\").replace('"', '\\"') if plan_model else ""
 
-    model_roles_raw = os.environ.get("NINEROUTER_CONNECT_MODEL_ROLES", "").strip()
-    parsed_roles = {}
-    if model_roles_raw:
-        try:
-            parsed_roles = json.loads(model_roles_raw)
-        except Exception:
-            pass
+    # model_roles_raw parsed above
 
     role_lines = ["modelRoles:"]
     if parsed_roles and isinstance(parsed_roles, dict):
@@ -460,8 +473,7 @@ elif tool == "omp":
     else:
         cleaned_cfg = re.sub(r"(?m)^\s*\{\}\s*$", "", config_content)
         cleaned_cfg = re.sub(r"(?ms)^modelRoles:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", cleaned_cfg).strip()
-        if subagents_block:
-            cleaned_cfg = re.sub(r"(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", cleaned_cfg).strip()
+        cleaned_cfg = re.sub(r"(?ms)^task\.agentModelOverrides:\s*.*?(?=^[a-zA-Z0-9_.-]+:|\Z)", "", cleaned_cfg).strip()
         parts = [roles_block]
         if subagents_block:
             parts.append(subagents_block)

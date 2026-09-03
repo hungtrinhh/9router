@@ -1,3 +1,9 @@
+# v0.5.97 (2026-09-03)
+
+## Fixes & Enhancements
+- **CLI Installers**: pass full `modelRoles` configuration object to `.bat` / `.ps1` and `.sh` setup installers so all 10 OMP model roles apply accurately
+- **CLI Installers**: automatically clean legacy `task.agentModelOverrides` from OMP `config.yml` during connection setup
+
 # v0.5.96 (2026-09-03)
 
 ## Changes

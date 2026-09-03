@@ -497,6 +497,7 @@ ${modelEntries}`;
                     smolModel={modelRoles.smol}
                     slowModel={modelRoles.slow}
                     planModel={modelRoles.plan}
+                    modelRoles={modelRoles}
                     className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
                   />
                   <Button
@@ -767,6 +768,7 @@ ${modelEntries}`;
                   smolModel={modelRoles.smol}
                   slowModel={modelRoles.slow}
                   planModel={modelRoles.plan}
+                  modelRoles={modelRoles}
                   variant="ghost"
                 />
               </div>

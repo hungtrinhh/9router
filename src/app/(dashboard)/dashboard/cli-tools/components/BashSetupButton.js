@@ -21,7 +21,7 @@ export default function BashSetupButton({
   smolModel = "",
   slowModel = "",
   planModel = "",
-  subagentModels = null,
+  modelRoles = null,
   models = [],
   variant = "secondary",
   className = "",
@@ -51,8 +51,8 @@ export default function BashSetupButton({
         if (smolModel) modelArgs += ` -SmolModel ${psQuote(smolModel)}`;
         if (slowModel) modelArgs += ` -SlowModel ${psQuote(slowModel)}`;
         if (planModel) modelArgs += ` -PlanModel ${psQuote(planModel)}`;
-        if (subagentModels && typeof subagentModels === "object" && Object.keys(subagentModels).length > 0) {
-          modelArgs += ` -SubagentModelsJson ${psQuote(JSON.stringify(subagentModels))}`;
+        if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
+          modelArgs += ` -ModelRolesJson ${psQuote(JSON.stringify(modelRoles))}`;
         }
         if (Array.isArray(models) && models.length > 0) {
           const modelsJoined = models.map((m) => psQuote(m)).join(",");
@@ -69,8 +69,8 @@ export default function BashSetupButton({
         if (smolModel) shModelArgs += ` --smol-model ${shellQuote(smolModel)}`;
         if (slowModel) shModelArgs += ` --slow-model ${shellQuote(slowModel)}`;
         if (planModel) shModelArgs += ` --plan-model ${shellQuote(planModel)}`;
-        if (subagentModels && typeof subagentModels === "object" && Object.keys(subagentModels).length > 0) {
-          shModelArgs += ` --subagents ${shellQuote(JSON.stringify(subagentModels))}`;
+        if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
+          shModelArgs += ` --model-roles ${shellQuote(JSON.stringify(modelRoles))}`;
         }
         if (Array.isArray(models) && models.length > 0) {
           shModelArgs += ` --models ${shellQuote(models.join(","))}`;
@@ -108,8 +108,8 @@ export default function BashSetupButton({
     if (smolModel) shModelArgs += ` --smol-model ${shellQuote(smolModel)}`;
     if (slowModel) shModelArgs += ` --slow-model ${shellQuote(slowModel)}`;
     if (planModel) shModelArgs += ` --plan-model ${shellQuote(planModel)}`;
-    if (subagentModels && typeof subagentModels === "object" && Object.keys(subagentModels).length > 0) {
-      shModelArgs += ` --subagents ${shellQuote(JSON.stringify(subagentModels))}`;
+    if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
+      shModelArgs += ` --model-roles ${shellQuote(JSON.stringify(modelRoles))}`;
     }
     if (Array.isArray(models) && models.length > 0) {
       shModelArgs += ` --models ${shellQuote(models.join(","))}`;
