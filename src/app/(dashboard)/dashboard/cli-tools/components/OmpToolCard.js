@@ -23,38 +23,6 @@ const OMP_MODEL_ROLES = [
   { id: "advisor", label: "Advisor", help: "Passive turn-by-turn code review and advice" },
 ];
 
-const OMP_SUBAGENT_TYPES = [
-  {
-    id: "task",
-    label: "Task (General)",
-    help: "Default general-purpose subagent for delegated multi-step tasks",
-  },
-  {
-    id: "scout",
-    label: "Scout (Research)",
-    help: "Fast read-only agent for exploratory codebase research & file searching",
-  },
-  {
-    id: "reviewer",
-    label: "Reviewer",
-    help: "Code review specialist for quality, security & architecture analysis",
-  },
-  {
-    id: "security-reviewer",
-    label: "Security Reviewer",
-    help: "Read-only security specialist for repository vulnerability discovery",
-  },
-  {
-    id: "designer",
-    label: "Designer",
-    help: "UI/UX specialist for frontend design implementation & visual polish",
-  },
-  {
-    id: "sonic",
-    label: "Sonic (Fast)",
-    help: "Low-reasoning subagent for strictly mechanical updates & data collection",
-  },
-];
 
 function ModelField({ label, value, placeholder, onChange, onSelect, disabled, help, onClear }) {
   return (
@@ -142,16 +110,13 @@ export default function OmpToolCard({
       advisor: initialStatus?.omp?.advisorModel || "",
     }
   );
-  const [subagentModels, setSubagentModels] = useState(
-    initialStatus?.omp?.subagentModels || {}
-  );
   const selectedModel = modelRoles.default || "";
   const smolModel = modelRoles.smol || "";
   const slowModel = modelRoles.slow || "";
   const planModel = modelRoles.plan || "";
 
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalTarget, setModalTarget] = useState(null); // 'default' | 'smol' | 'slow' | 'plan' | subagent ID
+  const [modalTarget, setModalTarget] = useState(null); // role ID
   const [modelAliases, setModelAliases] = useState({});
   const [showManualConfigModal, setShowManualConfigModal] = useState(false);
   const [customBaseUrl, setCustomBaseUrl] = useState("");
@@ -188,9 +153,6 @@ export default function OmpToolCard({
         task: roles.task || status?.omp?.taskModel || status?.savedConfig?.taskModel || "",
         advisor: roles.advisor || status?.omp?.advisorModel || status?.savedConfig?.advisorModel || "",
       });
-      if (status?.omp?.subagentModels || status?.savedConfig?.subagentModels) {
-        setSubagentModels(status?.omp?.subagentModels || status?.savedConfig?.subagentModels || {});
-      }
       if (status?.omp?.apiKey) {
         setSelectedApiKey(status.omp.apiKey);
       } else if (apiKeys?.length > 0) {
@@ -263,24 +225,15 @@ export default function OmpToolCard({
   const handleApplySettings = async (overrides = {}) => {
     const currentSelectedModels = "selectedModels" in overrides ? overrides.selectedModels : selectedModels;
     const currentModelRoles = "modelRoles" in overrides ? overrides.modelRoles : modelRoles;
-    const currentSubagentModels = "subagentModels" in overrides ? overrides.subagentModels : subagentModels;
     const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
     const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
 
-    const mappedSubagents = {};
-    if (currentSubagentModels && typeof currentSubagentModels === "object") {
-      for (const type of OMP_SUBAGENT_TYPES) {
-        const m = currentSubagentModels[type.id]?.trim();
-        if (m) mappedSubagents[type.id] = m;
-      }
-    }
 
     const effectivePrimaryModel =
       currentModelRoles.default?.trim() ||
       currentSelectedModels?.[0] ||
       currentModelRoles.smol?.trim() ||
       currentModelRoles.slow?.trim() ||
-      Object.values(mappedSubagents)[0] ||
       "";
 
     // Collect all distinct models selected across models array, roles & subagents
@@ -288,7 +241,6 @@ export default function OmpToolCard({
       new Set([
         ...(Array.isArray(currentSelectedModels) ? currentSelectedModels : []),
         ...Object.values(currentModelRoles).map((m) => m?.trim()).filter(Boolean),
-        ...Object.values(mappedSubagents),
       ].filter(Boolean))
     );
 
@@ -319,7 +271,6 @@ export default function OmpToolCard({
           smolModel: currentModelRoles.smol || undefined,
           slowModel: currentModelRoles.slow || undefined,
           planModel: currentModelRoles.plan || undefined,
-          subagentModels: mappedSubagents,
         }),
       });
       const data = await res.json();
@@ -356,7 +307,6 @@ export default function OmpToolCard({
           default: "", smol: "", slow: "", plan: "", vision: "",
           designer: "", commit: "", tiny: "", task: "", advisor: ""
         });
-        setSubagentModels({});
         setSelectedApiKey("");
         checkOmpStatus();
       } else {
@@ -376,10 +326,6 @@ export default function OmpToolCard({
       const nextRoles = { ...modelRoles, [modalTarget]: val };
       setModelRoles(nextRoles);
       nextOverrides = { modelRoles: nextRoles };
-    } else if (modalTarget) {
-      const nextSubs = { ...subagentModels, [modalTarget]: val };
-      setSubagentModels(nextSubs);
-      nextOverrides = { subagentModels: nextSubs };
     }
     setModalTarget(null);
     handleApplySettings(nextOverrides);
@@ -388,8 +334,6 @@ export default function OmpToolCard({
   const getTargetTitle = () => {
     const role = OMP_MODEL_ROLES.find((r) => r.id === modalTarget);
     if (role) return `${role.label} Model`;
-    const sub = OMP_SUBAGENT_TYPES.find((s) => s.id === modalTarget);
-    if (sub) return `${sub.label} Subagent`;
     return "Model";
   };
 
@@ -397,7 +341,6 @@ export default function OmpToolCard({
     if (OMP_MODEL_ROLES.some((r) => r.id === modalTarget)) {
       return modelRoles[modalTarget] || "";
     }
-    if (modalTarget) return subagentModels[modalTarget] || "";
     return "";
   };
 
@@ -414,7 +357,6 @@ export default function OmpToolCard({
       new Set([
         ...selectedModels,
         ...Object.values(modelRoles).map((m) => m?.trim()).filter(Boolean),
-        ...Object.values(subagentModels).map((m) => m?.trim()).filter(Boolean),
       ].filter(Boolean))
     );
     const modelEntries = allModelsList
@@ -441,14 +383,6 @@ export default function OmpToolCard({
     models:
 ${modelEntries}`;
 
-    const subagentLines = [];
-    for (const type of OMP_SUBAGENT_TYPES) {
-      const m = subagentModels[type.id]?.trim();
-      if (m) {
-        subagentLines.push(`  ${type.id}: "9router/${m}"`);
-      }
-    }
-
     const roleLines = [];
     for (const r of OMP_MODEL_ROLES) {
       const val = modelRoles[r.id]?.trim() || (r.id === "default" ? activeM : "");
@@ -457,11 +391,7 @@ ${modelEntries}`;
       }
     }
 
-    const configYaml = `modelRoles:\n${roleLines.join("\n")}${
-      subagentLines.length > 0
-        ? `\n\ntask.agentModelOverrides:\n${subagentLines.join("\n")}`
-        : ""
-    }`;
+    const configYaml = `modelRoles:\n${roleLines.join("\n")}`;
 
     return [
       {
@@ -567,7 +497,6 @@ ${modelEntries}`;
                     smolModel={modelRoles.smol}
                     slowModel={modelRoles.slow}
                     planModel={modelRoles.plan}
-                    subagentModels={subagentModels}
                     className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
                   />
                   <Button
@@ -780,44 +709,6 @@ ${modelEntries}`;
                     help={role.help}
                   />
                 ))}
-                {/* Subagents Section */}
-                <div className="my-1 border-t border-border pt-3">
-                  <div className="mb-2 flex items-start gap-2">
-                    <span className="material-symbols-outlined text-primary text-[18px]">
-                      account_tree
-                    </span>
-                    <div>
-                      <p className="text-xs font-semibold text-text-main">
-                        Subagent model overrides
-                      </p>
-                      <p className="text-[10px] text-text-muted">
-                        Override models for specific task agents. Leave blank to inherit Primary / Smol default.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {OMP_SUBAGENT_TYPES.map((type) => (
-                  <ModelField
-                    key={type.id}
-                    label={type.label}
-                    help={type.help}
-                    value={subagentModels[type.id] || ""}
-                    onChange={(val) => {
-                      const nextSubs = { ...subagentModels, [type.id]: val };
-                      setSubagentModels(nextSubs);
-                      debouncedSave({ subagentModels: nextSubs });
-                    }}
-                    placeholder={`${modelRoles.default || "Primary Model"} (inherit)`}
-                    onSelect={() => setModalTarget(type.id)}
-                    onClear={() => {
-                      const nextSubs = { ...subagentModels, [type.id]: "" };
-                      setSubagentModels(nextSubs);
-                      handleApplySettings({ subagentModels: nextSubs });
-                    }}
-                    disabled={!hasActiveProviders}
-                  />
-                ))}
 
                 {/* Usage hint */}
                 <div className="flex flex-col gap-1 p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
@@ -876,7 +767,6 @@ ${modelEntries}`;
                   smolModel={modelRoles.smol}
                   slowModel={modelRoles.slow}
                   planModel={modelRoles.plan}
-                  subagentModels={subagentModels}
                   variant="ghost"
                 />
               </div>

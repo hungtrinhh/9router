@@ -1,3 +1,8 @@
+# v0.5.96 (2026-09-03)
+
+## Changes
+- **CLI Tools (OMP)**: remove subagent model overrides section from Oh My Pi configuration card as subagents are project-defined
+
 # v0.5.95 (2026-09-03)
 
 ## Features & CI
