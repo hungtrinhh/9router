@@ -1,3 +1,8 @@
+# v0.5.94 (2026-09-03)
+
+## Fixes
+- **Dashboard**: fix ReferenceError where `selectedModel` was undefined in OMP tool card model list tags
+
 # v0.5.93 (2026-09-03)
 
 ## Enhancements

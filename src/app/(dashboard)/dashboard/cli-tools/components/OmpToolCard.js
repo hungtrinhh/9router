@@ -145,6 +145,10 @@ export default function OmpToolCard({
   const [subagentModels, setSubagentModels] = useState(
     initialStatus?.omp?.subagentModels || {}
   );
+  const selectedModel = modelRoles.default || "";
+  const smolModel = modelRoles.smol || "";
+  const slowModel = modelRoles.slow || "";
+  const planModel = modelRoles.plan || "";
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalTarget, setModalTarget] = useState(null); // 'default' | 'smol' | 'slow' | 'plan' | subagent ID
@@ -678,26 +682,28 @@ ${modelEntries}`;
                           <span
                             key={model}
                             onClick={() => {
-                              if (model === selectedModel) {
-                                setSelectedModel("");
-                                handleApplySettings({ selectedModel: "" });
+                              if (model === modelRoles.default) {
+                                const nextRoles = { ...modelRoles, default: "" };
+                                setModelRoles(nextRoles);
+                                handleApplySettings({ modelRoles: nextRoles });
                               } else {
-                                setSelectedModel(model);
-                                handleApplySettings({ selectedModel: model });
+                                const nextRoles = { ...modelRoles, default: model };
+                                setModelRoles(nextRoles);
+                                handleApplySettings({ modelRoles: nextRoles });
                               }
                             }}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs cursor-pointer transition-colors ${
-                              model === selectedModel
+                              model === modelRoles.default
                                 ? "bg-primary/10 text-primary border border-primary"
                                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-transparent hover:border-border"
                             }`}
                             title={
-                              model === selectedModel
+                              model === modelRoles.default
                                 ? "Click to clear active model"
                                 : "Click to set as primary active model"
                             }
                           >
-                            {model === selectedModel && (
+                            {model === modelRoles.default && (
                               <span className="material-symbols-outlined text-[10px]">star</span>
                             )}
                             {model}
@@ -706,10 +712,11 @@ ${modelEntries}`;
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const newModels = selectedModels.filter((m) => m !== model);
-                                const nextActive = selectedModel === model ? (newModels[0] || "") : selectedModel;
+                                const nextActive = modelRoles.default === model ? (newModels[0] || "") : modelRoles.default;
                                 setSelectedModels(newModels);
-                                setSelectedModel(nextActive);
-                                handleApplySettings({ selectedModels: newModels, selectedModel: nextActive });
+                                const nextRoles = { ...modelRoles, default: nextActive };
+                                setModelRoles(nextRoles);
+                                handleApplySettings({ selectedModels: newModels, modelRoles: nextRoles });
                               }}
                               className="ml-0.5 hover:text-red-500"
                             >
@@ -733,9 +740,9 @@ ${modelEntries}`;
                         Add Model
                       </button>
                       <span className="text-xs text-text-muted">
-                        {selectedModels.length > 0 && selectedModel ? (
+                        {selectedModels.length > 0 && modelRoles.default ? (
                           <>
-                            Active: <span className="text-primary">{selectedModel}</span>
+                            Active: <span className="text-primary">{modelRoles.default}</span>
                           </>
                         ) : selectedModels.length > 0 ? (
                           <span className="text-yellow-500">Click a model to set/clear active</span>
@@ -801,7 +808,7 @@ ${modelEntries}`;
                       setSubagentModels(nextSubs);
                       debouncedSave({ subagentModels: nextSubs });
                     }}
-                    placeholder={`${selectedModel || "Primary Model"} (inherit)`}
+                    placeholder={`${modelRoles.default || "Primary Model"} (inherit)`}
                     onSelect={() => setModalTarget(type.id)}
                     onClear={() => {
                       const nextSubs = { ...subagentModels, [type.id]: "" };
@@ -897,20 +904,20 @@ ${modelEntries}`;
           onSelect={(model) => {
             if (!selectedModels.includes(model.value)) {
               const next = [...selectedModels, model.value];
-              const nextActive = selectedModel || model.value;
+              const nextActive = modelRoles.default || model.value;
               setSelectedModels(next);
-              if (!selectedModel) setSelectedModel(model.value);
-              handleApplySettings({ selectedModels: next, selectedModel: nextActive });
+              const nextRoles = { ...modelRoles, default: nextActive };
+              setModelRoles(nextRoles);
+              handleApplySettings({ selectedModels: next, modelRoles: nextRoles });
             }
           }}
           onDeselect={(model) => {
             const remaining = selectedModels.filter((m) => m !== model.value);
-            const nextActive = selectedModel === model.value ? (remaining[0] || "") : selectedModel;
+            const nextActive = modelRoles.default === model.value ? (remaining[0] || "") : modelRoles.default;
             setSelectedModels(remaining);
-            if (selectedModel === model.value) {
-              setSelectedModel(remaining[0] || "");
-            }
-            handleApplySettings({ selectedModels: remaining, selectedModel: nextActive });
+            const nextRoles = { ...modelRoles, default: nextActive };
+            setModelRoles(nextRoles);
+            handleApplySettings({ selectedModels: remaining, modelRoles: nextRoles });
           }}
           selectedModel={null}
           activeProviders={activeProviders}
