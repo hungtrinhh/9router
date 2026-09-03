@@ -5,6 +5,7 @@ import { Card, Button, ModelSelectModal, ManualConfigModal } from "@/shared/comp
 import { useModelCaps } from "@/shared/hooks/useModelCaps";
 import Image from "next/image";
 import BaseUrlSelect from "./BaseUrlSelect";
+import { rememberEndpoint } from "./cliEndpointPresets";
 import ApiKeySelect from "./ApiKeySelect";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 
@@ -97,6 +98,7 @@ export default function GrokBuildToolCard({
   const hasFetchedStatus = useRef(Boolean(initialStatus));
 
   const configuredModel = grokStatus?.settings?.model;
+  const currentBaseUrl = configuredModel?.base_url || "";
   const configStatus = !grokStatus?.installed
     ? null
     : !configuredModel?.base_url
@@ -195,6 +197,8 @@ export default function GrokBuildToolCard({
       });
       const data = await res.json();
       if (res.ok) {
+        // Remember the endpoint so it stays selectable next time
+        rememberEndpoint(getEffectiveBaseUrl(), { tunnelPublicUrl, tailscaleUrl });
         setMessage({ type: "success", text: "Settings saved successfully!" });
         checkStatus();
       } else {
@@ -344,6 +348,7 @@ export default function GrokBuildToolCard({
                     tunnelPublicUrl={tunnelPublicUrl}
                     tailscaleEnabled={tailscaleEnabled}
                     tailscaleUrl={tailscaleUrl}
+                    currentUrl={currentBaseUrl}
                   />
                 </div>
 

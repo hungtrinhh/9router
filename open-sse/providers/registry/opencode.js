@@ -32,6 +32,9 @@ export default {
     { id: "mimo-v2.5-free", name: "MiMo V2.5 Free" },
     { id: "deepseek-v4-pro-free", name: "DeepSeek V4 Pro Free" },
     { id: "big-pickle", name: "Big Pickle" },
+    // Only this model is served by /zen/v1/responses; the rest stay on
+    // /chat/completions, so the format is declared per-model, not per-provider.
+    { id: "muse-spark-1.2-contributor-free", name: "Muse Spark 1.2 Contributor Free", targetFormat: "openai-responses" },
   ],
   modelsFetcher: { url: "https://opencode.ai/zen/v1/models", type: "opencode-free" },
   passthroughModels: true,
