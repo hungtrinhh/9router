@@ -89,6 +89,11 @@ while [ "$#" -gt 0 ]; do
       PLAN_MODEL="$2"
       shift 2
       ;;
+    --model-roles)
+      need_value "$@"
+      MODEL_ROLES="$2"
+      shift 2
+      ;;
     --subagents)
       need_value "$@"
       SUBAGENTS="$2"
@@ -194,6 +199,7 @@ export NINEROUTER_CONNECT_MODEL="$MODEL"
 export NINEROUTER_CONNECT_SMOL_MODEL="$SMOL_MODEL"
 export NINEROUTER_CONNECT_SLOW_MODEL="$SLOW_MODEL"
 export NINEROUTER_CONNECT_PLAN_MODEL="$PLAN_MODEL"
+export NINEROUTER_CONNECT_MODEL_ROLES="${MODEL_ROLES:-}"
 export NINEROUTER_CONNECT_SUBAGENTS="$SUBAGENTS"
 export NINEROUTER_CONNECT_MODELS="$MODELS_LIST"
 export NINEROUTER_CONNECT_HOME="${NINEROUTER_HOME:-$HOME}"
@@ -390,16 +396,28 @@ elif tool == "omp":
     esc_slow = slow_model.replace("\\", "\\\\").replace('"', '\\"') if slow_model else esc_default
     esc_plan = plan_model.replace("\\", "\\\\").replace('"', '\\"') if plan_model else ""
 
-    role_lines = [
-        "modelRoles:",
-        f'  default: "9router/{esc_default}"',
-        f'  smol: "9router/{esc_smol}"',
-        f'  slow: "9router/{esc_slow}"',
-    ]
-    if esc_plan:
-        role_lines.append(f'  plan: "9router/{esc_plan}"')
-    roles_block = "\n".join(role_lines)
+    model_roles_raw = os.environ.get("NINEROUTER_CONNECT_MODEL_ROLES", "").strip()
+    parsed_roles = {}
+    if model_roles_raw:
+        try:
+            parsed_roles = json.loads(model_roles_raw)
+        except Exception:
+            pass
 
+    role_lines = ["modelRoles:"]
+    if parsed_roles and isinstance(parsed_roles, dict):
+        for r_name, r_val in parsed_roles.items():
+            if isinstance(r_val, str) and r_val.strip():
+                clean_val = r_val.strip().replace("9router/", "")
+                esc_val = clean_val.replace("\\", "\\\\").replace('"', '\\"')
+                role_lines.append(f'  {r_name}: "9router/{esc_val}"')
+    else:
+        role_lines.append(f'  default: "9router/{esc_default}"')
+        role_lines.append(f'  smol: "9router/{esc_smol}"')
+        role_lines.append(f'  slow: "9router/{esc_slow}"')
+        if esc_plan:
+            role_lines.append(f'  plan: "9router/{esc_plan}"')
+    roles_block = "\n".join(role_lines)
     subagent_lines = []
     for agent_name, agent_val in subagents.items():
         if isinstance(agent_val, str) and agent_val.strip():

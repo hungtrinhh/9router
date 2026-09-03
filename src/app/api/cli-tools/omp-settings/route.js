@@ -12,6 +12,19 @@ import { resolveModelCaps } from "@/shared/utils/modelLimits";
 
 const execAsync = promisify(exec);
 
+export const OMP_MODEL_ROLE_NAMES = [
+  "default",
+  "smol",
+  "slow",
+  "vision",
+  "plan",
+  "designer",
+  "commit",
+  "tiny",
+  "task",
+  "advisor",
+];
+
 const OMP_SUBAGENT_NAMES = [
   "task",
   "scout",
@@ -137,16 +150,51 @@ export async function GET() {
         ? Object.values(savedConfig.subagentModels).some((v) => typeof v === "string" && v.trim())
         : false;
 
+    const savedRoles = savedConfig?.modelRoles || {};
+    const effectiveRoles = {};
+    for (const role of OMP_MODEL_ROLE_NAMES) {
+      effectiveRoles[role] =
+        savedRoles[role] ||
+        (role === "default"
+          ? (savedConfig?.activeModel || savedConfig?.model || yamlActiveModel || "")
+          : role === "smol"
+          ? (savedConfig?.smolModel || yamlRole("smol") || "")
+          : role === "slow"
+          ? (savedConfig?.slowModel || yamlRole("slow") || "")
+          : role === "plan"
+          ? (savedConfig?.planModel || yamlRole("plan") || "")
+          : role === "vision"
+          ? (savedConfig?.visionModel || yamlRole("vision") || "")
+          : role === "designer"
+          ? (savedConfig?.designerModel || yamlRole("designer") || "")
+          : role === "commit"
+          ? (savedConfig?.commitModel || yamlRole("commit") || "")
+          : role === "tiny"
+          ? (savedConfig?.tinyModel || yamlRole("tiny") || "")
+          : role === "task"
+          ? (savedConfig?.taskModel || yamlRole("task") || "")
+          : role === "advisor"
+          ? (savedConfig?.advisorModel || yamlRole("advisor") || "")
+          : (yamlRole(role) || ""));
+    }
+
     // Persisted DB config is the primary source of truth so settings survive
     // restarts and work across local/remote environments.
     const omp = {
       models: Array.isArray(savedConfig?.models) && savedConfig.models.length > 0
         ? savedConfig.models
         : modelIds,
-      activeModel: savedConfig?.activeModel || savedConfig?.model || yamlActiveModel || "",
-      smolModel: savedConfig?.smolModel || yamlRole("smol") || "",
-      slowModel: savedConfig?.slowModel || yamlRole("slow") || "",
-      planModel: savedConfig?.planModel || yamlRole("plan") || "",
+      activeModel: effectiveRoles.default || "",
+      smolModel: effectiveRoles.smol || "",
+      slowModel: effectiveRoles.slow || "",
+      planModel: effectiveRoles.plan || "",
+      visionModel: effectiveRoles.vision || "",
+      designerModel: effectiveRoles.designer || "",
+      commitModel: effectiveRoles.commit || "",
+      tinyModel: effectiveRoles.tiny || "",
+      taskModel: effectiveRoles.task || "",
+      advisorModel: effectiveRoles.advisor || "",
+      modelRoles: effectiveRoles,
       subagentModels: hasPersistedSubagents ? savedConfig.subagentModels : yamlSubagentModels,
       baseUrl: savedConfig?.baseUrl || providerConfig?.baseUrl || null,
       apiKey: savedConfig?.apiKey || providerConfig?.apiKey || null,
@@ -183,6 +231,13 @@ export async function POST(request) {
       smolModel,
       slowModel,
       planModel,
+      visionModel,
+      designerModel,
+      commitModel,
+      tinyModel,
+      taskModel,
+      advisorModel,
+      modelRoles: inputModelRoles,
       subagentModels,
     } = await request.json();
 
@@ -190,21 +245,31 @@ export async function POST(request) {
       ? models.filter(Boolean)
       : (typeof model === "string" && model.trim() ? [model.trim()] : []);
 
+    const roleMap = {
+      default: activeModel || inputModelRoles?.default || model || "",
+      smol: smolModel || inputModelRoles?.smol || "",
+      slow: slowModel || inputModelRoles?.slow || "",
+      plan: planModel || inputModelRoles?.plan || "",
+      vision: visionModel || inputModelRoles?.vision || "",
+      designer: designerModel || inputModelRoles?.designer || "",
+      commit: commitModel || inputModelRoles?.commit || "",
+      tiny: tinyModel || inputModelRoles?.tiny || "",
+      task: taskModel || inputModelRoles?.task || "",
+      advisor: advisorModel || inputModelRoles?.advisor || "",
+      ...(inputModelRoles && typeof inputModelRoles === "object" ? inputModelRoles : {}),
+    };
+
     const subagentList = subagentModels && typeof subagentModels === "object"
       ? Object.values(subagentModels).map((m) => (typeof m === "string" ? m.trim() : "")).filter(Boolean)
       : [];
 
     const allModelsSet = new Set([
       ...explicitModels,
-      activeModel,
-      smolModel,
-      slowModel,
-      planModel,
+      ...Object.values(roleMap).filter((m) => typeof m === "string" && m.trim()),
       ...subagentList,
     ].filter(Boolean));
 
     const modelsArray = Array.from(allModelsSet);
-
     if (!baseUrl || modelsArray.length === 0) {
       return NextResponse.json(
         { error: "baseUrl and at least one model are required" },
@@ -215,9 +280,12 @@ export async function POST(request) {
     const normalizedBaseUrl = baseUrl.endsWith("/v1") ? baseUrl : `${baseUrl}/v1`;
     const keyToUse = apiKey || "sk_9router";
 
-    const primaryModel = activeModel && modelsArray.includes(activeModel)
-      ? activeModel
+    const primaryModel = roleMap.default && modelsArray.includes(roleMap.default)
+      ? roleMap.default
       : modelsArray[0];
+
+    // Ensure roleMap.default is primaryModel
+    roleMap.default = primaryModel;
 
     // Merge subagent overrides
     const savedConfig = await getCliToolConfig("omp");
@@ -238,9 +306,16 @@ export async function POST(request) {
       model: primaryModel,
       models: modelsArray,
       activeModel: primaryModel,
-      smolModel: smolModel || "",
-      slowModel: slowModel || "",
-      planModel: planModel || "",
+      smolModel: roleMap.smol || "",
+      slowModel: roleMap.slow || "",
+      planModel: roleMap.plan || "",
+      visionModel: roleMap.vision || "",
+      designerModel: roleMap.designer || "",
+      commitModel: roleMap.commit || "",
+      tinyModel: roleMap.tiny || "",
+      taskModel: roleMap.task || "",
+      advisorModel: roleMap.advisor || "",
+      modelRoles: roleMap,
       subagentModels: mergedSubagentModels,
       baseUrl: normalizedBaseUrl,
       apiKey: keyToUse,
@@ -280,24 +355,16 @@ export async function POST(request) {
       // Update config.yml
       const configData = await readConfigYaml();
       if (!configData.modelRoles) configData.modelRoles = {};
-      configData.modelRoles.default = `9router/${primaryModel}`;
-
-      if (smolModel && modelsArray.includes(smolModel)) {
-        configData.modelRoles.smol = `9router/${smolModel}`;
-      } else if (configData.modelRoles.smol?.startsWith("9router/")) {
-        delete configData.modelRoles.smol;
+      for (const role of OMP_MODEL_ROLE_NAMES) {
+        const val = roleMap[role];
+        if (val && modelsArray.includes(val)) {
+          configData.modelRoles[role] = `9router/${val}`;
+        } else if (configData.modelRoles[role]?.startsWith("9router/")) {
+          delete configData.modelRoles[role];
+        }
       }
-
-      if (slowModel && modelsArray.includes(slowModel)) {
-        configData.modelRoles.slow = `9router/${slowModel}`;
-      } else if (configData.modelRoles.slow?.startsWith("9router/")) {
-        delete configData.modelRoles.slow;
-      }
-
-      if (planModel && modelsArray.includes(planModel)) {
-        configData.modelRoles.plan = `9router/${planModel}`;
-      } else if (configData.modelRoles.plan?.startsWith("9router/")) {
-        delete configData.modelRoles.plan;
+      if (Object.keys(configData.modelRoles).length === 0) {
+        delete configData.modelRoles;
       }
 
       if (subagentModels && typeof subagentModels === "object") {
@@ -351,7 +418,7 @@ export async function DELETE() {
 
     const configData = await readConfigYaml();
     if (configData.modelRoles) {
-      for (const role of ["default", "smol", "slow", "plan"]) {
+      for (const role of OMP_MODEL_ROLE_NAMES) {
         if (configData.modelRoles[role]?.startsWith("9router/")) {
           delete configData.modelRoles[role];
         }

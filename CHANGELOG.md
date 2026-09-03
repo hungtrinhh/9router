@@ -1,3 +1,8 @@
+# v0.5.93 (2026-09-03)
+
+## Enhancements
+- **CLI Tools (OMP)**: update Oh My Pi (OMP) model role integration to support all 10 standard built-in roles (`default`, `smol`, `slow`, `vision`, `plan`, `designer`, `commit`, `tiny`, `task`, `advisor`) across dashboard UI, CLI menus, API settings, database persistence, and PowerShell/Bash connect installers
+
 # v0.5.92 (2026-09-03)
 
 ## Changes

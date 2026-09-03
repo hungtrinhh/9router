@@ -619,11 +619,19 @@ async function buildOmpHeader() {
 
   const lines = [`  Status:   ${COLORS.green}✓ Configured${COLORS.reset}`];
   if (omp?.baseUrl) lines.push(`  Endpoint: ${COLORS.cyan}${omp.baseUrl}${COLORS.reset}`);
-  if (omp?.activeModel) lines.push(`  Primary:  ${COLORS.dim}${omp.activeModel}${COLORS.reset}`);
+  if (omp?.activeModel) lines.push(`  Default:  ${COLORS.dim}${omp.activeModel}${COLORS.reset}`);
   const models = Array.isArray(omp?.models) && omp.models.length > 0 ? omp.models : [];
   if (models.length > 0) lines.push(`  Models:   ${COLORS.dim}${models.join(", ")}${COLORS.reset}`);
-  if (omp?.smolModel) lines.push(`  Smol:     ${COLORS.dim}${omp.smolModel}${COLORS.reset}`);
-  if (omp?.slowModel) lines.push(`  Slow:     ${COLORS.dim}${omp.slowModel}${COLORS.reset}`);
+  const roles = omp?.modelRoles || {};
+  if (roles.smol || omp?.smolModel) lines.push(`  Smol:     ${COLORS.dim}${roles.smol || omp?.smolModel}${COLORS.reset}`);
+  if (roles.slow || omp?.slowModel) lines.push(`  Slow:     ${COLORS.dim}${roles.slow || omp?.slowModel}${COLORS.reset}`);
+  if (roles.vision) lines.push(`  Vision:   ${COLORS.dim}${roles.vision}${COLORS.reset}`);
+  if (roles.plan || omp?.planModel) lines.push(`  Plan:     ${COLORS.dim}${roles.plan || omp?.planModel}${COLORS.reset}`);
+  if (roles.designer) lines.push(`  Designer: ${COLORS.dim}${roles.designer}${COLORS.reset}`);
+  if (roles.commit) lines.push(`  Commit:   ${COLORS.dim}${roles.commit}${COLORS.reset}`);
+  if (roles.tiny) lines.push(`  Tiny:     ${COLORS.dim}${roles.tiny}${COLORS.reset}`);
+  if (roles.task) lines.push(`  Task:     ${COLORS.dim}${roles.task}${COLORS.reset}`);
+  if (roles.advisor) lines.push(`  Advisor:  ${COLORS.dim}${roles.advisor}${COLORS.reset}`);
   return lines.join("\n");
 
 async function ompQuickSetup(port) {
@@ -651,15 +659,20 @@ async function ompQuickSetup(port) {
   }
 
   const saved = settingsResult.data?.savedConfig || {};
+  const savedRoles = saved.modelRoles || {};
   const result = await api.applyCliToolSettings("omp", {
     baseUrl: endpoint,
     apiKey,
     model,
     models,
     activeModel: model,
-    smolModel: saved.smolModel || "",
-    slowModel: saved.slowModel || "",
-    planModel: saved.planModel || "",
+    modelRoles: {
+      ...savedRoles,
+      default: model,
+    },
+    smolModel: savedRoles.smol || saved.smolModel || "",
+    slowModel: savedRoles.slow || saved.slowModel || "",
+    planModel: savedRoles.plan || saved.planModel || "",
     subagentModels: saved.subagentModels || {},
   });
   showStatus(result.success ? "Oh My Pi setup completed!" : `Failed: ${result.error}`, result.success ? "success" : "error");

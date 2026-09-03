@@ -484,7 +484,7 @@ gemini extensions install https://github.com/manalkaff/opendesign
       },
       {
         type: "info",
-        text: "9Router configures the '9router' provider in ~/.omp/agent/models.yml and sets model roles (default, smol, slow, plan) in ~/.omp/agent/config.yml.",
+        text: "9Router configures the '9router' provider in ~/.omp/agent/models.yml and sets model roles (default, smol, slow, vision, plan, designer, commit, tiny, task, advisor) in ~/.omp/agent/config.yml.",
       },
       {
         type: "warning",

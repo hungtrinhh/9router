@@ -63,6 +63,30 @@ describe("Oh My Pi (OMP) CLI Tool", () => {
     expect(parsedConfig.modelRoles.default).toBe("9router/claude-sonnet-4-6");
     expect(parsedConfig.modelRoles.smol).toBe("9router/gemini-2.5-flash");
   });
+
+  it("supports all 10 OMP model roles in config.yml", () => {
+    const roles = {
+      default: "9router/ag/gemini-3.8-flash-medium",
+      smol: "9router/ag/gemini-3.8-flash-medium",
+      slow: "9router/cmc/deepseek/deepseek-v4-pro",
+      vision: "9router/ag/gemini-3.8-flash-medium",
+      plan: "9router/cmc/deepseek/deepseek-v4-pro",
+      designer: "9router/ag/gemini-3.8-flash-medium",
+      commit: "9router/ag/gemini-3.8-flash-medium",
+      tiny: "9router/google-antigravity/gemini-3.1-flash-lite",
+      task: "9router/cmc/deepseek/deepseek-v4-pro",
+      advisor: "9router/openai-codex/gpt-5.5",
+    };
+
+    const configData = { modelRoles: roles };
+    const configYamlStr = stringifyYAML(configData);
+    const parsedConfig = parseYAML(configYamlStr);
+
+    for (const [rName, rVal] of Object.entries(roles)) {
+      expect(parsedConfig.modelRoles[rName]).toBe(rVal);
+    }
+  });
+
   it("handles subagent task.agentModelOverrides in config.yml", () => {
     const configData = {
       modelRoles: {

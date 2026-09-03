@@ -10,6 +10,19 @@ import BashSetupButton from "./BashSetupButton";
 import { matchKnownEndpoint } from "./cliEndpointMatch";
 const ENDPOINT = "/api/cli-tools/omp-settings";
 
+const OMP_MODEL_ROLES = [
+  { id: "default", label: "Default", help: "Primary model for main chat and coding" },
+  { id: "smol", label: "Smol", help: "Fast model for lightweight tasks, prewalk handoff, and summaries" },
+  { id: "slow", label: "Slow", help: "Thinking model for deep reasoning & bug analysis" },
+  { id: "vision", label: "Vision", help: "Multimodal image understanding and analysis" },
+  { id: "plan", label: "Plan", help: "Architect model for planning and task decomposition" },
+  { id: "designer", label: "Designer", help: "UI/UX design specialist" },
+  { id: "commit", label: "Commit", help: "Commit message and changelog generation" },
+  { id: "tiny", label: "Tiny", help: "Tiny fast model for session titles, memory & lightweight metadata" },
+  { id: "task", label: "Task", help: "Subtask & general-purpose delegation" },
+  { id: "advisor", label: "Advisor", help: "Passive turn-by-turn code review and advice" },
+];
+
 const OMP_SUBAGENT_TYPES = [
   {
     id: "task",
@@ -115,12 +128,20 @@ export default function OmpToolCard({
   const [selectedModels, setSelectedModels] = useState(
     initialStatus?.omp?.models || initialStatus?.savedConfig?.models || []
   );
-  const [selectedModel, setSelectedModel] = useState(
-    initialStatus?.omp?.activeModel || initialStatus?.omp?.models?.[0] || initialStatus?.savedConfig?.activeModel || initialStatus?.savedConfig?.model || ""
+  const [modelRoles, setModelRoles] = useState(
+    initialStatus?.omp?.modelRoles || {
+      default: initialStatus?.omp?.activeModel || initialStatus?.omp?.models?.[0] || initialStatus?.savedConfig?.activeModel || initialStatus?.savedConfig?.model || "",
+      smol: initialStatus?.omp?.smolModel || "",
+      slow: initialStatus?.omp?.slowModel || "",
+      plan: initialStatus?.omp?.planModel || "",
+      vision: initialStatus?.omp?.visionModel || "",
+      designer: initialStatus?.omp?.designerModel || "",
+      commit: initialStatus?.omp?.commitModel || "",
+      tiny: initialStatus?.omp?.tinyModel || "",
+      task: initialStatus?.omp?.taskModel || "",
+      advisor: initialStatus?.omp?.advisorModel || "",
+    }
   );
-  const [smolModel, setSmolModel] = useState(initialStatus?.omp?.smolModel || "");
-  const [slowModel, setSlowModel] = useState(initialStatus?.omp?.slowModel || "");
-  const [planModel, setPlanModel] = useState(initialStatus?.omp?.planModel || "");
   const [subagentModels, setSubagentModels] = useState(
     initialStatus?.omp?.subagentModels || {}
   );
@@ -149,17 +170,20 @@ export default function OmpToolCard({
       if (Array.isArray(models)) {
         setSelectedModels(models);
       }
-      const active = status?.omp?.activeModel || status?.omp?.models?.[0] || status?.savedConfig?.activeModel || status?.savedConfig?.model || "";
-      if (active) setSelectedModel(active);
-      if (status?.omp?.smolModel !== undefined || status?.savedConfig?.smolModel !== undefined) {
-        setSmolModel(status?.omp?.smolModel || status?.savedConfig?.smolModel || "");
-      }
-      if (status?.omp?.slowModel !== undefined || status?.savedConfig?.slowModel !== undefined) {
-        setSlowModel(status?.omp?.slowModel || status?.savedConfig?.slowModel || "");
-      }
-      if (status?.omp?.planModel !== undefined || status?.savedConfig?.planModel !== undefined) {
-        setPlanModel(status?.omp?.planModel || status?.savedConfig?.planModel || "");
-      }
+      const roles = status?.omp?.modelRoles || {};
+      const active = roles.default || status?.omp?.activeModel || status?.omp?.models?.[0] || status?.savedConfig?.activeModel || status?.savedConfig?.model || "";
+      setModelRoles({
+        default: active,
+        smol: roles.smol || status?.omp?.smolModel || status?.savedConfig?.smolModel || "",
+        slow: roles.slow || status?.omp?.slowModel || status?.savedConfig?.slowModel || "",
+        plan: roles.plan || status?.omp?.planModel || status?.savedConfig?.planModel || "",
+        vision: roles.vision || status?.omp?.visionModel || status?.savedConfig?.visionModel || "",
+        designer: roles.designer || status?.omp?.designerModel || status?.savedConfig?.designerModel || "",
+        commit: roles.commit || status?.omp?.commitModel || status?.savedConfig?.commitModel || "",
+        tiny: roles.tiny || status?.omp?.tinyModel || status?.savedConfig?.tinyModel || "",
+        task: roles.task || status?.omp?.taskModel || status?.savedConfig?.taskModel || "",
+        advisor: roles.advisor || status?.omp?.advisorModel || status?.savedConfig?.advisorModel || "",
+      });
       if (status?.omp?.subagentModels || status?.savedConfig?.subagentModels) {
         setSubagentModels(status?.omp?.subagentModels || status?.savedConfig?.subagentModels || {});
       }
@@ -234,10 +258,7 @@ export default function OmpToolCard({
 
   const handleApplySettings = async (overrides = {}) => {
     const currentSelectedModels = "selectedModels" in overrides ? overrides.selectedModels : selectedModels;
-    const currentSelectedModel = "selectedModel" in overrides ? overrides.selectedModel : selectedModel;
-    const currentSmolModel = "smolModel" in overrides ? overrides.smolModel : smolModel;
-    const currentSlowModel = "slowModel" in overrides ? overrides.slowModel : slowModel;
-    const currentPlanModel = "planModel" in overrides ? overrides.planModel : planModel;
+    const currentModelRoles = "modelRoles" in overrides ? overrides.modelRoles : modelRoles;
     const currentSubagentModels = "subagentModels" in overrides ? overrides.subagentModels : subagentModels;
     const currentApiKey = "selectedApiKey" in overrides ? overrides.selectedApiKey : selectedApiKey;
     const currentCustomBaseUrl = "customBaseUrl" in overrides ? overrides.customBaseUrl : customBaseUrl;
@@ -251,10 +272,10 @@ export default function OmpToolCard({
     }
 
     const effectivePrimaryModel =
-      currentSelectedModel?.trim() ||
+      currentModelRoles.default?.trim() ||
       currentSelectedModels?.[0] ||
-      currentSmolModel?.trim() ||
-      currentSlowModel?.trim() ||
+      currentModelRoles.smol?.trim() ||
+      currentModelRoles.slow?.trim() ||
       Object.values(mappedSubagents)[0] ||
       "";
 
@@ -262,10 +283,7 @@ export default function OmpToolCard({
     const allModels = Array.from(
       new Set([
         ...(Array.isArray(currentSelectedModels) ? currentSelectedModels : []),
-        effectivePrimaryModel,
-        currentSmolModel?.trim(),
-        currentSlowModel?.trim(),
-        currentPlanModel?.trim(),
+        ...Object.values(currentModelRoles).map((m) => m?.trim()).filter(Boolean),
         ...Object.values(mappedSubagents),
       ].filter(Boolean))
     );
@@ -293,9 +311,10 @@ export default function OmpToolCard({
           apiKey: keyToUse,
           models: allModels,
           activeModel: effectivePrimaryModel,
-          smolModel: currentSmolModel || undefined,
-          slowModel: currentSlowModel || undefined,
-          planModel: currentPlanModel || undefined,
+          modelRoles: currentModelRoles,
+          smolModel: currentModelRoles.smol || undefined,
+          slowModel: currentModelRoles.slow || undefined,
+          planModel: currentModelRoles.plan || undefined,
           subagentModels: mappedSubagents,
         }),
       });
@@ -329,10 +348,10 @@ export default function OmpToolCard({
       if (res.ok) {
         setMessage({ type: "success", text: "Settings reset successfully!" });
         setSelectedModels([]);
-        setSelectedModel("");
-        setSmolModel("");
-        setSlowModel("");
-        setPlanModel("");
+        setModelRoles({
+          default: "", smol: "", slow: "", plan: "", vision: "",
+          designer: "", commit: "", tiny: "", task: "", advisor: ""
+        });
         setSubagentModels({});
         setSelectedApiKey("");
         checkOmpStatus();
@@ -349,18 +368,10 @@ export default function OmpToolCard({
   const handleModelSelect = (model) => {
     const val = model.value;
     let nextOverrides = {};
-    if (modalTarget === "default") {
-      setSelectedModel(val);
-      nextOverrides = { selectedModel: val };
-    } else if (modalTarget === "smol") {
-      setSmolModel(val);
-      nextOverrides = { smolModel: val };
-    } else if (modalTarget === "slow") {
-      setSlowModel(val);
-      nextOverrides = { slowModel: val };
-    } else if (modalTarget === "plan") {
-      setPlanModel(val);
-      nextOverrides = { planModel: val };
+    if (OMP_MODEL_ROLES.some((r) => r.id === modalTarget)) {
+      const nextRoles = { ...modelRoles, [modalTarget]: val };
+      setModelRoles(nextRoles);
+      nextOverrides = { modelRoles: nextRoles };
     } else if (modalTarget) {
       const nextSubs = { ...subagentModels, [modalTarget]: val };
       setSubagentModels(nextSubs);
@@ -371,20 +382,17 @@ export default function OmpToolCard({
   };
 
   const getTargetTitle = () => {
-    if (modalTarget === "default") return "Primary Model";
-    if (modalTarget === "smol") return "Smol Model";
-    if (modalTarget === "slow") return "Slow Model";
-    if (modalTarget === "plan") return "Plan Model";
+    const role = OMP_MODEL_ROLES.find((r) => r.id === modalTarget);
+    if (role) return `${role.label} Model`;
     const sub = OMP_SUBAGENT_TYPES.find((s) => s.id === modalTarget);
     if (sub) return `${sub.label} Subagent`;
     return "Model";
   };
 
   const getTargetCurrentValue = () => {
-    if (modalTarget === "default") return selectedModel;
-    if (modalTarget === "smol") return smolModel;
-    if (modalTarget === "slow") return slowModel;
-    if (modalTarget === "plan") return planModel;
+    if (OMP_MODEL_ROLES.some((r) => r.id === modalTarget)) {
+      return modelRoles[modalTarget] || "";
+    }
     if (modalTarget) return subagentModels[modalTarget] || "";
     return "";
   };
@@ -397,17 +405,11 @@ export default function OmpToolCard({
         ? "sk_9router"
         : "<API_KEY_FROM_DASHBOARD>";
 
-    const activeM = selectedModel || selectedModels[0] || "claude-sonnet-4-6";
-    const smolM = smolModel || "claude-haiku-4-5";
-    const slowM = slowModel || "claude-opus-4-6";
-
+    const activeM = modelRoles.default || selectedModels[0] || "claude-sonnet-4-6";
     const allModelsList = Array.from(
       new Set([
         ...selectedModels,
-        activeM,
-        smolM,
-        slowM,
-        planModel,
+        ...Object.values(modelRoles).map((m) => m?.trim()).filter(Boolean),
         ...Object.values(subagentModels).map((m) => m?.trim()).filter(Boolean),
       ].filter(Boolean))
     );
@@ -443,10 +445,15 @@ ${modelEntries}`;
       }
     }
 
-    const configYaml = `modelRoles:
-  default: "9router/${activeM}"
-  smol: "9router/${smolM}"
-  slow: "9router/${slowM}"${planModel ? `\n  plan: "9router/${planModel}"` : ""}${
+    const roleLines = [];
+    for (const r of OMP_MODEL_ROLES) {
+      const val = modelRoles[r.id]?.trim() || (r.id === "default" ? activeM : "");
+      if (val) {
+        roleLines.push(`  ${r.id}: "9router/${val}"`);
+      }
+    }
+
+    const configYaml = `modelRoles:\n${roleLines.join("\n")}${
       subagentLines.length > 0
         ? `\n\ntask.agentModelOverrides:\n${subagentLines.join("\n")}`
         : ""
@@ -551,11 +558,11 @@ ${modelEntries}`;
                     tool="omp"
                     baseUrl={getEffectiveBaseUrl()}
                     apiKey={selectedApiKey}
-                    model={selectedModel || selectedModels[0] || "claude-sonnet-4-6"}
+                    model={modelRoles.default || selectedModels[0] || "claude-sonnet-4-6"}
                     models={selectedModels}
-                    smolModel={smolModel}
-                    slowModel={slowModel}
-                    planModel={planModel}
+                    smolModel={modelRoles.smol}
+                    slowModel={modelRoles.slow}
+                    planModel={modelRoles.plan}
                     subagentModels={subagentModels}
                     className="!bg-yellow-500/20 !border-yellow-500/40 !text-yellow-700 dark:!text-yellow-300 hover:!bg-yellow-500/30"
                   />
@@ -740,78 +747,32 @@ ${modelEntries}`;
                   </div>
                 </div>
 
-                {/* Primary (Default) Model */}
-                <ModelField
-                  label="Primary Model"
-                  value={selectedModel}
-                  placeholder={selectedModels[0] || "claude-sonnet-4-6"}
-                  onChange={(val) => {
-                    setSelectedModel(val);
-                    debouncedSave({ selectedModel: val });
-                  }}
-                  onSelect={() => setModalTarget("default")}
-                  onClear={() => {
-                    setSelectedModel("");
-                    handleApplySettings({ selectedModel: "" });
-                  }}
-                  disabled={!hasActiveProviders}
-                  help="Default model role used for main conversation and coding"
-                />
-
-                {/* Smol Model */}
-                <ModelField
-                  label="Smol Model"
-                  value={smolModel}
-                  placeholder={`${selectedModel || "Primary Model"} (inherit)`}
-                  onChange={(val) => {
-                    setSmolModel(val);
-                    debouncedSave({ smolModel: val });
-                  }}
-                  onSelect={() => setModalTarget("smol")}
-                  onClear={() => {
-                    setSmolModel("");
-                    handleApplySettings({ smolModel: "" });
-                  }}
-                  disabled={!hasActiveProviders}
-                  help="Fast model for lightweight tasks, prewalk handoff, and summaries"
-                />
-
-                {/* Slow Model */}
-                <ModelField
-                  label="Slow Model"
-                  value={slowModel}
-                  placeholder={`${selectedModel || "Primary Model"} (inherit)`}
-                  onChange={(val) => {
-                    setSlowModel(val);
-                    debouncedSave({ slowModel: val });
-                  }}
-                  onSelect={() => setModalTarget("slow")}
-                  onClear={() => {
-                    setSlowModel("");
-                    handleApplySettings({ slowModel: "" });
-                  }}
-                  disabled={!hasActiveProviders}
-                  help="Deep reasoning model for complex architectural & bug analysis"
-                />
-
-                {/* Plan Model */}
-                <ModelField
-                  label="Plan Model"
-                  value={planModel}
-                  placeholder={`${selectedModel || "Primary Model"} (inherit)`}
-                  onChange={(val) => {
-                    setPlanModel(val);
-                    debouncedSave({ planModel: val });
-                  }}
-                  onSelect={() => setModalTarget("plan")}
-                  onClear={() => {
-                    setPlanModel("");
-                    handleApplySettings({ planModel: "" });
-                  }}
-                  disabled={!hasActiveProviders}
-                  help="Planning model for plan mode and task decomposition"
-                />
-
+                {/* 10 OMP Model Roles */}
+                {OMP_MODEL_ROLES.map((role) => (
+                  <ModelField
+                    key={role.id}
+                    label={`${role.label} Model`}
+                    value={modelRoles[role.id] || ""}
+                    placeholder={
+                      role.id === "default"
+                        ? selectedModels[0] || "claude-sonnet-4-6"
+                        : `${modelRoles.default || "Primary Model"} (inherit)`
+                    }
+                    onChange={(val) => {
+                      const nextRoles = { ...modelRoles, [role.id]: val };
+                      setModelRoles(nextRoles);
+                      debouncedSave({ modelRoles: nextRoles });
+                    }}
+                    onSelect={() => setModalTarget(role.id)}
+                    onClear={() => {
+                      const nextRoles = { ...modelRoles, [role.id]: "" };
+                      setModelRoles(nextRoles);
+                      handleApplySettings({ modelRoles: nextRoles });
+                    }}
+                    disabled={!hasActiveProviders}
+                    help={role.help}
+                  />
+                ))}
                 {/* Subagents Section */}
                 <div className="my-1 border-t border-border pt-3">
                   <div className="mb-2 flex items-start gap-2">
@@ -856,7 +817,7 @@ ${modelEntries}`;
                   <p className="text-xs font-medium text-blue-600 dark:text-blue-400">CLI Usage:</p>
                   <code className="text-xs font-mono text-text-muted">omp</code>
                   <code className="text-xs font-mono text-text-muted">
-                    omp --model 9router/{selectedModel || selectedModels[0] || "claude-sonnet-4-6"}
+                    omp --model 9router/${modelRoles.default || selectedModels[0] || "claude-sonnet-4-6"}
                   </code>
                 </div>
               </div>
@@ -881,7 +842,7 @@ ${modelEntries}`;
                   variant="primary"
                   size="sm"
                   onClick={handleApplySettings}
-                  disabled={!selectedModel && selectedModels.length === 0}
+                  disabled={!modelRoles.default && selectedModels.length === 0}
                   loading={applying}
                 >
                   <span className="material-symbols-outlined text-[14px] mr-1">save</span>Apply
@@ -903,10 +864,11 @@ ${modelEntries}`;
                   tool="omp"
                   baseUrl={getEffectiveBaseUrl()}
                   apiKey={selectedApiKey}
-                  model={selectedModel || selectedModels[0] || "claude-sonnet-4-6"}
+                  model={modelRoles.default || selectedModels[0] || "claude-sonnet-4-6"}
                   models={selectedModels}
-                  slowModel={slowModel}
-                  planModel={planModel}
+                  smolModel={modelRoles.smol}
+                  slowModel={modelRoles.slow}
+                  planModel={modelRoles.plan}
                   subagentModels={subagentModels}
                   variant="ghost"
                 />

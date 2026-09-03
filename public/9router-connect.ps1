@@ -16,8 +16,9 @@ param(
 
   [string]$PlanModel = "",
 
-  [string]$SubagentModelsJson = "",
+  [string]$ModelRolesJson = "",
 
+  [string]$SubagentModelsJson = "",
   [string[]]$Models = @(),
 
   [switch]$NoPrompt
@@ -343,14 +344,32 @@ $modelsYamlString
   $escSmol = if (-not [string]::IsNullOrWhiteSpace($SmolModel)) { $SmolModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { $escDefault }
   $escSlow = if (-not [string]::IsNullOrWhiteSpace($SlowModel)) { $SlowModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { $escDefault }
   $escPlan = if (-not [string]::IsNullOrWhiteSpace($PlanModel)) { $PlanModel.Trim().Replace("\", "\\").Replace('"', '\"') } else { "" }
-
   $roleLines = New-Object System.Collections.Generic.List[string]
   $roleLines.Add("modelRoles:")
-  $roleLines.Add("  default: `"9router/$escDefault`"")
-  $roleLines.Add("  smol: `"9router/$escSmol`"")
-  $roleLines.Add("  slow: `"9router/$escSlow`"")
-  if (-not [string]::IsNullOrWhiteSpace($escPlan)) {
-    $roleLines.Add("  plan: `"9router/$escPlan`"")
+
+  $parsedRoles = $null
+  if (-not [string]::IsNullOrWhiteSpace($ModelRolesJson)) {
+    try {
+      $parsedRoles = $ModelRolesJson | ConvertFrom-Json
+    } catch {}
+  }
+
+  if ($null -ne $parsedRoles) {
+    foreach ($prop in $parsedRoles.PSObject.Properties) {
+      if (-not [string]::IsNullOrWhiteSpace($prop.Value)) {
+        $rName = $prop.Name.Trim()
+        $rVal = [string]($prop.Value) -replace "^9router/", ""
+        $escVal = $rVal.Trim().Replace("\", "\\").Replace('"', '\"')
+        $roleLines.Add("  ${rName}: `"9router/$escVal`"")
+      }
+    }
+  } else {
+    $roleLines.Add("  default: `"9router/$escDefault`"")
+    $roleLines.Add("  smol: `"9router/$escSmol`"")
+    $roleLines.Add("  slow: `"9router/$escSlow`"")
+    if (-not [string]::IsNullOrWhiteSpace($escPlan)) {
+      $roleLines.Add("  plan: `"9router/$escPlan`"")
+    }
   }
   $rolesBlock = $roleLines -join "`r`n"
 
