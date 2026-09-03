@@ -1,3 +1,8 @@
+# v0.5.92 (2026-09-03)
+
+## Changes
+- **Sync**: sync and merge upstream master updates into release branch
+
 # v0.5.91 (2026-09-02)
 
 ## Features & Enhancements
