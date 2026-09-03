@@ -30,6 +30,8 @@ jobs:
 
       - name: Install dependencies
         run: npm install
+      - name: Verify pre-release code integrity
+        run: node scripts/verify-pre-release.mjs
 
       - name: Build application
         run: npm run build
