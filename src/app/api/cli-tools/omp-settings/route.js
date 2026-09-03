@@ -12,7 +12,7 @@ import { resolveModelCaps } from "@/shared/utils/modelLimits";
 
 const execAsync = promisify(exec);
 
-export const OMP_MODEL_ROLE_NAMES = [
+const OMP_MODEL_ROLE_NAMES = [
   "default",
   "smol",
   "slow",
