@@ -1,3 +1,9 @@
+# v0.5.99 (2026-09-04)
+
+## Fixes
+- **Antigravity/Gemini**: normalize Gemini `contents` and strip empty turns left behind by thought-only assistant messages to fix `400` empty-parts errors — merge consecutive same-role turns and drop empty parts after the antigravity executor's thought stripping, reusing the shared `normalizeGeminiContents` helper across the OpenAI→Gemini translator and the Antigravity executor
+- **CLI Installers (OMP)**: fetch catalog models only for capability metadata (context window / max tokens / vision / reasoning) and stop writing them into `models.yml` — only models the user explicitly configured are emitted in `.ps1` and `.sh` connect scripts
+
 # v0.5.98 (2026-09-03)
 
 ## Fixes

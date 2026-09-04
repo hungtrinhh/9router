@@ -278,13 +278,9 @@ elseif ($Tool -eq "omp") {
     }
   }
 
-  if ($null -ne $catalogModelIds -and $catalogModelIds.Count -gt 0) {
-    foreach ($cm in $catalogModelIds) {
-      if (-not [string]::IsNullOrWhiteSpace($cm)) {
-        $allModelIds.Add($cm.Trim())
-      }
-    }
-  }
+  # NOTE: catalog models are fetched above only for capability metadata
+  # (context window / max tokens / vision / reasoning). They are NOT added
+  # to models.yml — only models the user explicitly configured are written.
 
   $uniqueModelIds = New-Object System.Collections.Generic.List[string]
   foreach ($mid in $allModelIds) {

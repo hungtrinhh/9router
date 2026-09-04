@@ -355,7 +355,9 @@ elif tool == "omp":
             if m.strip():
                 all_models.append(m.strip())
 
-    # Include catalog models if available
+    # NOTE: catalog models are fetched here only for capability metadata
+    # (context window / max tokens / vision / reasoning). They are NOT added
+    # to models.yml — only models the user explicitly configured are written.
     catalog_models_map = {}
     try:
         import urllib.request
@@ -366,8 +368,6 @@ elif tool == "omp":
                 mid = item.get("id")
                 if mid:
                     catalog_models_map[mid] = item
-                    if mid not in all_models:
-                        all_models.append(mid)
     except Exception:
         pass
     # Deduplicate preserving order
@@ -401,6 +401,7 @@ elif tool == "omp":
             f'{inputs}'
         )
 
+    models_entries_str = "\n".join(model_entries)
     nine_router_block = (
         "  9router:\n"
         f'    baseUrl: "{escaped_url}"\n'
