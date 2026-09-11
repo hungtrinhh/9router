@@ -5,6 +5,10 @@ import { PROVIDERS } from "../config/providers.js";
 
 const PLACEHOLDER = " ";
 
+// Exported so format translators that must synthesize a reasoning block (CommandCode
+// harnesses) reuse the exact same 1-char placeholder.
+export const REASONING_PLACEHOLDER = PLACEHOLDER;
+
 // Provider-level rules derive from registry transport.reasoningInject (single source)
 const providerRuleFor = (provider) => PROVIDERS[provider]?.reasoningInject;
 

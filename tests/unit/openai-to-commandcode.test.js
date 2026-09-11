@@ -179,3 +179,65 @@ describe("openaiToCommandCodeRequest — tools schema conversion", () => {
     expect(out.params.tools).toBeUndefined();
   });
 });
+
+describe("openaiToCommandCodeRequest — assistant reasoning round-trip", () => {
+  // Verified live (2026-09-11): CommandCode's thinking-aware upstream aborts the whole
+  // request with "The `reasoning_content` in the thinking mode must be passed back
+  // to the API." when an assistant tool-call turn arrives without a reasoning block.
+  const call = { id: "call_1", type: "function", function: { name: "calc", arguments: '{"expr":"2+2"}' } };
+
+  it("replays reasoning_content as a leading reasoning block", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [
+        { role: "user", content: "2+2?" },
+        { role: "assistant", content: "", reasoning_content: "call calc on 2+2", tool_calls: [call] },
+      ],
+    }, true);
+
+    const blocks = out.params.messages[1].content;
+    expect(blocks[0]).toEqual({ type: "reasoning", text: "call calc on 2+2" });
+    expect(blocks.map((b) => b.type)).toEqual(["reasoning", "tool-call"]);
+  });
+
+  it("places the reasoning block before text when the turn has both", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [
+        { role: "assistant", content: "final answer", reasoning: "vendor `reasoning` spelling" },
+      ],
+    }, true);
+
+    const blocks = out.params.messages[0].content;
+    expect(blocks.map((b) => b.type)).toEqual(["reasoning", "text"]);
+    expect(blocks[0].text).toBe("vendor `reasoning` spelling");
+  });
+
+  it("synthesizes a placeholder reasoning block on a tool-call turn whose reasoning was stripped", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [
+        { role: "user", content: "2+2?" },
+        { role: "assistant", content: "", tool_calls: [call] },
+      ],
+    }, true);
+
+    const blocks = out.params.messages[1].content;
+    expect(blocks.map((b) => b.type)).toEqual(["reasoning", "tool-call"]);
+    expect(blocks[0].text.length).toBeGreaterThan(0);
+  });
+
+  it("treats empty reasoning_content on a tool-call turn as absent", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [{ role: "assistant", content: "", reasoning_content: "", tool_calls: [call] }],
+    }, true);
+
+    const blocks = out.params.messages[0].content;
+    expect(blocks.map((b) => b.type)).toEqual(["reasoning", "tool-call"]);
+    expect(blocks[0].text.length).toBeGreaterThan(0);
+  });
+
+  it("emits no reasoning block on a plain assistant turn", () => {
+    const out = openaiToCommandCodeRequest(MODEL, {
+      messages: [{ role: "assistant", content: "answer" }],
+    }, true);
+    expect(out.params.messages[0].content).toEqual([{ type: "text", text: "answer" }]);
+  });
+});

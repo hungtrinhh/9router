@@ -22,6 +22,14 @@ export const CLAUDE_BLOCK = {
   REDACTED_THINKING: "redacted_thinking",
 };
 
+// CommandCode (AI SDK v5) content blocks.
+export const COMMANDCODE_BLOCK = {
+  TEXT: "text",
+  REASONING: "reasoning",
+  TOOL_CALL: "tool-call",
+  TOOL_RESULT: "tool-result",
+};
+
 // OpenAI Responses API item types.
 export const RESPONSES_ITEM = {
   MESSAGE: "message",

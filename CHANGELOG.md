@@ -1,3 +1,8 @@
+# v0.5.100 (2026-09-11)
+
+## Fixes
+- **CommandCode**: emit the assistant `reasoning` content block ahead of text/tool-call blocks in OpenAI → CommandCode translation, echoing the client's `reasoning_content` and synthesizing the shared 1-char placeholder when a tool-call turn arrives without it — multi-turn tool-call sessions on DeepSeek V4 thinking models (`deepseek/deepseek-v4-pro`, `deepseek/deepseek-v4-flash`, `deepseek/deepseek-v4.1-flash`) no longer fail with `400 [CommandCode error: The \`reasoning_content\` in the thinking mode must be passed back to the API.]`
+
 # v0.5.99 (2026-09-04)
 
 ## Fixes

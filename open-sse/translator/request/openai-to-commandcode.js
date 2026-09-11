@@ -7,12 +7,18 @@
  *  - params.messages[*].content: Array of content blocks (NEVER a string)
  *  - tool_use blocks (assistant): {type:"tool-call", toolCallId, toolName, input}
  *  - tool_result blocks (role=user): {type:"tool-result", toolCallId, toolName, output}
+ *  - reasoning blocks (assistant): {type:"reasoning", text} — MUST be echoed back on
+ *    assistant turns that carried thinking, otherwise thinking-mode upstreams
+ *    (DeepSeek V4) fail the whole request with
+ *    "The `reasoning_content` in the thinking mode must be passed back to the API."
  *  - tools[*]: Anthropic plain {name, description, input_schema}
  */
 import { register } from "../index.js";
 import { FORMATS } from "../formats.js";
 import { randomUUID } from "crypto";
-import { ROLE, OPENAI_BLOCK } from "../schema/index.js";
+import { ROLE, OPENAI_BLOCK, COMMANDCODE_BLOCK } from "../schema/index.js";
+import { extractReasoningText } from "../concerns/reasoning.js";
+import { REASONING_PLACEHOLDER } from "../../utils/reasoningContentInjector.js";
 import { DEFAULT_MAX_TOKENS } from "../../config/runtimeConfig.js";
 
 function flattenText(content) {
@@ -77,10 +83,10 @@ function convertMessages(messages = []) {
       out.push({
         role: ROLE.TOOL,
         content: [{
-          type: "tool-result",
+          type: COMMANDCODE_BLOCK.TOOL_RESULT,
           toolCallId: m.tool_call_id || "",
           toolName: m.name || "",
-          output: { type: "text", value },
+          output: { type: OPENAI_BLOCK.TEXT, value },
         }],
       });
       continue;
@@ -88,13 +94,24 @@ function convertMessages(messages = []) {
 
     if (role === ROLE.ASSISTANT) {
       const blocks = [];
+      const toolCalls = Array.isArray(m.tool_calls) ? m.tool_calls : [];
+      // Reasoning MUST precede text/tool-call blocks: upstream (AI SDK v5) replays
+      // the assistant turn in stream order and fails the whole request when a
+      // thinking-mode tool-call turn arrives without a reasoning block
+      // ("The `reasoning_content` in the thinking mode must be passed back to the API.").
+      // Echo the client's reasoning when it survived; otherwise satisfy validation
+      // with the same 1-char placeholder the shared reasoningContentInjector uses
+      // for DeepSeek/Kimi, keeping the synthesized case scoped to tool-call turns.
+      const reasoning = extractReasoningText(m);
+      if (reasoning) blocks.push({ type: COMMANDCODE_BLOCK.REASONING, text: reasoning });
+      else if (toolCalls.length) blocks.push({ type: COMMANDCODE_BLOCK.REASONING, text: REASONING_PLACEHOLDER });
       const text = flattenText(m.content);
       if (text) blocks.push({ type: OPENAI_BLOCK.TEXT, text });
-      if (Array.isArray(m.tool_calls)) {
-        for (const tc of m.tool_calls) {
+      if (toolCalls.length) {
+        for (const tc of toolCalls) {
           const fn = tc.function || {};
           blocks.push({
-            type: "tool-call",
+            type: COMMANDCODE_BLOCK.TOOL_CALL,
             toolCallId: tc.id || "",
             toolName: fn.name || "",
             input: safeParseJson(fn.arguments),
