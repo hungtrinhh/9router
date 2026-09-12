@@ -178,7 +178,18 @@ export const CLAUDE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official C
 // makes the backend flag the request and answer 429 Quota Exhausted.
 export const ANTIGRAVITY_PROMPT_REWRITES = [
   { from: "You are a Claude agent, built on Anthropic's Claude Agent SDK.", to: "" },
-  { from: /opencode/gi, to: (m) => (m === "OpenCode" ? "Antigravity" : m === "OPENCODE" ? "ANTIGRAVITY" : "antigravity") }
+  { from: /opencode/gi, to: (m) => (m === "OpenCode" ? "Antigravity" : m === "OPENCODE" ? "ANTIGRAVITY" : "antigravity") },
+  // Harness system prompts (Claude Code, oh-my-pi, Hermes, …) carry a spec-citation block that
+  // Google's Cloud Code backend content-inspects: with `RFC 2119: MUST, REQUIRED, SHOULD, …`
+  // (or a <system-conventions> wrapper) in systemInstruction, it answers a generic
+  // `429 RESOURCE_EXHAUSTED` on *every* account in the pool, which makes multi-account
+  // fallback useless and looks exactly like quota exhaustion. Verified on the live endpoint
+  // with a 3.6 KB harness-style prompt + 12 tools: 429 plain, 200 after these rewrites, on
+  // three different ag/gemini-3.8 models. The zero-width space is invisible; the tag rename
+  // only changes the wrapper name. See upstream #3274 / #3358.
+  { from: /RFC\s*2119/g, to: "RFC\u200B2119" },
+  { from: "<system-conventions>", to: "<system_conventions>" },
+  { from: "</system-conventions>", to: "</system_conventions>" }
 ];
 
 export const ANTIGRAVITY_DEFAULT_SYSTEM = "You are Antigravity, a powerful agentic AI coding assistant designed by the Google Deepmind team working on Advanced Agentic Coding.You are pair programming with a USER to solve their coding task. The task may require creating a new codebase, modifying or debugging an existing codebase, or simply answering a question.**Absolute paths only****Proactiveness**";
