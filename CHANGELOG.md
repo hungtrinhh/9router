@@ -1,3 +1,12 @@
+# v0.5.101 (2026-09-12)
+
+## Fixes
+- **Antigravity quota cache**: entries now expire after 5 minutes and `clearAntigravityQuota()` drops the cached block (plus any strike-based 15-minute block) when an account is re-enabled from the dashboard — a pair that 429'd once no longer stays skipped for the whole upstream reset window while the quota page shows quota available
+- **Dashboard enable/disable**: bulk toggles (provider card on the Providers list, media-provider cards, Usage page "Turn off Empty" / "Turn on available") now report per-connection results, re-read state from the server instead of trusting an optimistic flip, and raise a toast when some connections failed to update — a failed PUT (expired session, network, 5xx) can no longer leave the UI claiming a state the DB never reached
+
+## Changes
+- **Merge `master`** (78 commits): Claude Code auto-compact window + 1M-context toggle, Gemini 3.8 Flash support with the bumped Antigravity IDE fingerprint, Antigravity weekly quota tracking and anti-abuse guard on multi-account refresh, strike-breaker for optimistic Antigravity quota readings that keep 429ing, Xiaomi MiMo dual auth (Desktop + token plan), standalone Qwen provider plus a refreshed catalog, Codex GPT Image 2.5 / Flare / Sunburst image models and GPT-5.6 image aliases, OpenRouter and Vertex AI (Veo) video generation, OpenCode Go model catalog and Responses-path fixes, Cline/airforce envelope unwrapping and ClinePass key fixes, Kiro runtime-surface routing and payload fixes, Qoder catalog/capability refresh with usage reporting, Groq and Claude Fable quota tracking, dashboard provider status filter, Indonesian translation, and a batch of SSRF/cache_control/tool-schema hardening fixes
+
 # v0.5.100 (2026-09-11)
 
 ## Fixes
