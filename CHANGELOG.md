@@ -1,3 +1,9 @@
+# v0.5.102 (2026-09-12)
+
+## Fixes
+- **Models API (`/api/models`)**: fix `ReferenceError: getCapabilitiesForModel is not defined` that returned `500 Failed to fetch models` for every request as soon as one custom LLM model existed — the custom-model loop added in v0.5.101 called an unimported helper; caps now resolve through the alias-aware `resolveModelCaps`, so alias-registered providers (`cx`, `kr`, `cc`, `ds`, …) get their provider-specific context window instead of the generic pattern value (e.g. `cx/gpt-5.6-sol` → 372k, not 400k)
+- **Models API dedupe**: one row per routable id — catalog rows carry the provider id in `fullModel` and the routing alias in `routedModel`, while custom models are stored under the alias, so the old id-only check appended an alias-registered custom model as a second copy of the same model; the same pass drops the catalog's duplicate ids (gemini's STT rows reusing the LLM ids). Stored custom caps still override the heuristic on the surviving row
+
 # v0.5.101 (2026-09-12)
 
 ## Fixes
