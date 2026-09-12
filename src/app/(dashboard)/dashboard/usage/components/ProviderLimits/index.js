@@ -40,6 +40,8 @@ import {
 } from "./utils";
 import Card from "@/shared/components/Card";
 import { ConfirmModal, EditConnectionModal } from "@/shared/components";
+import { setConnectionsActive } from "@/shared/utils/connectionToggle";
+import { useNotificationStore } from "@/store/notificationStore";
 import { USAGE_SUPPORTED_PROVIDERS } from "@/shared/constants/providers";
 import { useCopyToClipboard } from "@/shared/hooks/useCopyToClipboard";
 
@@ -168,6 +170,7 @@ export default function ProviderLimits() {
     eligibleConnections: 0,
     providerFilteredConnections: 0,
   });
+  const notify = useNotificationStore();
 
   const intervalRef = useRef(null);
   const countdownRef = useRef(null);
@@ -733,23 +736,23 @@ export default function ProviderLimits() {
       if (!targetIds.length || bulkToggling) return;
       setBulkToggling(true);
       try {
-        await Promise.all(
-          targetIds.map((id) =>
-            fetch(`/api/providers/${id}`, {
-              method: "PUT",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ isActive }),
-            }),
-          ),
+        const { failed, total } = await setConnectionsActive(
+          targetIds.map((id) => ({ id })),
+          isActive,
         );
         await reconcileConnectionsPage(fetchConnections, page);
+        if (failed > 0) {
+          notify.error(
+            `${failed}/${total} connections could not be ${isActive ? "enabled" : "disabled"} — reloaded from the server`,
+          );
+        }
       } catch (error) {
         console.error("Error bulk toggling connections:", error);
       } finally {
         setBulkToggling(false);
       }
     },
-    [bulkToggling, fetchConnections, page],
+    [bulkToggling, fetchConnections, page, notify],
   );
 
   const handleDisableDepleted = () => {

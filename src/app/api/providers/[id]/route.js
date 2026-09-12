@@ -5,6 +5,7 @@ import {
   updateProviderConnection,
   deleteProviderConnection,
 } from "@/models";
+import { clearAntigravityQuota } from "@/sse/services/antigravityQuota.js";
 
 function normalizeProxyConfig(body = {}) {
   const hasAnyProxyField =
@@ -156,6 +157,10 @@ export async function PUT(request, { params }) {
     }
 
     const updated = await updateProviderConnection(id, updateData);
+
+    // A re-enabled Antigravity account must not inherit the quota block recorded
+    // while it was off — otherwise routing keeps skipping it until that resetAt.
+    if (isActive === true) clearAntigravityQuota(id);
 
     // Hide sensitive fields
     const result = { ...updated };

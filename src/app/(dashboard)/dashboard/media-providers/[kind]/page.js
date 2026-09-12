@@ -2,8 +2,10 @@
 
 import { useParams, notFound, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Card, Badge, Button, Toggle, AddCustomEmbeddingModal } from "@/shared/components";
+import { setConnectionsActive } from "@/shared/utils/connectionToggle";
+import { useNotificationStore } from "@/store/notificationStore";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS, getProvidersByKind } from "@/shared/constants/providers";
 
@@ -144,6 +146,7 @@ export default function MediaProviderKindPage() {
   const [customNodes, setCustomNodes] = useState([]);
   const [combos, setCombos] = useState([]);
   const [showAddCustomEmbedding, setShowAddCustomEmbedding] = useState(false);
+  const notify = useNotificationStore();
 
   // webSearch/webFetch listing pages are merged into /web
   useEffect(() => {
@@ -156,25 +159,36 @@ export default function MediaProviderKindPage() {
   const isEmbedding = kind === "embedding";
   const supportsCombo = COMBO_KINDS.has(kind);
 
+  const fetchConnections = useCallback(async () => {
+    try {
+      const res = await fetch("/api/providers", { cache: "no-store" });
+      if (!res.ok) return false;
+      const d = await res.json();
+      setConnections(d.connections || []);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     if (!kindConfig) return;
-    fetch("/api/providers", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setConnections(d.connections || []))
-      .catch(() => {});
-    if (isEmbedding) {
-      fetch("/api/provider-nodes", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => setCustomNodes((d.nodes || []).filter((n) => n.type === "custom-embedding")))
-        .catch(() => {});
-    }
-    if (supportsCombo) {
-      fetch("/api/combos", { cache: "no-store" })
-        .then((r) => r.json())
-        .then((d) => setCombos(d.combos || []))
-        .catch(() => {});
-    }
-  }, [isEmbedding, supportsCombo, kindConfig]);
+
+    (async () => {
+      await fetchConnections();
+
+      if (isEmbedding) {
+        const nodesRes = await fetch("/api/provider-nodes", { cache: "no-store" });
+        const d = await nodesRes.json();
+        setCustomNodes((d.nodes || []).filter((n) => n.type === "custom-embedding"));
+      }
+      if (supportsCombo) {
+        const combosRes = await fetch("/api/combos", { cache: "no-store" });
+        const d = await combosRes.json();
+        setCombos(d.combos || []);
+      }
+    })().catch(() => {});
+  }, [isEmbedding, supportsCombo, kindConfig, fetchConnections]);
 
   if (!kindConfig) return notFound();
 
@@ -193,18 +207,19 @@ export default function MediaProviderKindPage() {
 
   const handleToggleProvider = async (providerId, newActive) => {
     const providerConns = connections.filter((c) => c.provider === providerId);
+    if (providerConns.length === 0) return;
+
     setConnections((prev) =>
       prev.map((c) => (c.provider === providerId ? { ...c, isActive: newActive } : c))
     );
-    await Promise.allSettled(
-      providerConns.map((c) =>
-        fetch(`/api/providers/${c.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isActive: newActive }),
-        })
-      )
-    );
+
+    const { failed, total } = await setConnectionsActive(providerConns, newActive);
+    await fetchConnections();
+    if (failed > 0) {
+      notify.error(
+        `${failed}/${total} connections could not be ${newActive ? "enabled" : "disabled"} — reloaded from the server`,
+      );
+    }
   };
 
   const handleCreateCombo = async () => {

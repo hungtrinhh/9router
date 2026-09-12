@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import PropTypes from "prop-types";
 import {
   Card,
@@ -21,6 +21,7 @@ import {
 } from "@/shared/constants/providers";
 import Link from "next/link";
 import { getErrorCode, getRelativeTime } from "@/shared/utils";
+import { setConnectionsActive } from "@/shared/utils/connectionToggle";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useHeaderSearchStore } from "@/store/headerSearchStore";
 import ModelAvailabilityBadge from "./components/ModelAvailabilityBadge";
@@ -149,17 +150,29 @@ export default function ProvidersPage() {
       return (a.name || "").localeCompare(b.name || "");
     });
 
+  // Re-read connections from the server. Every optimistic toggle below is
+  // followed by this, so the UI can never keep claiming a state the DB never
+  // reached (failed PUT, expired session, network blip).
+  const fetchConnections = useCallback(async () => {
+    try {
+      const res = await fetch("/api/providers", { cache: "no-store" });
+      if (!res.ok) return false;
+      const data = await res.json();
+      setConnections(data.connections || []);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [connectionsRes, nodesRes] = await Promise.all([
-          fetch("/api/providers"),
+        const [, nodesRes] = await Promise.all([
+          fetchConnections(),
           fetch("/api/provider-nodes"),
         ]);
-        const connectionsData = await connectionsRes.json();
         const nodesData = await nodesRes.json();
-        if (connectionsRes.ok)
-          setConnections(connectionsData.connections || []);
         if (nodesRes.ok) setProviderNodes(nodesData.nodes || []);
       } catch (error) {
         console.log("Error fetching data:", error);
@@ -168,7 +181,7 @@ export default function ProvidersPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [fetchConnections]);
 
   const getProviderStats = (providerId, authType) => {
     const authTypes = Array.isArray(authType) ? authType : [authType];
@@ -224,18 +237,19 @@ export default function ProvidersPage() {
     const matches = (c) =>
       c.provider === providerId && authTypes.includes(c.authType);
     const providerConns = connections.filter(matches);
+    if (providerConns.length === 0) return;
+
     setConnections((prev) =>
       prev.map((c) => (matches(c) ? { ...c, isActive: newActive } : c)),
     );
-    await Promise.allSettled(
-      providerConns.map((c) =>
-        fetch(`/api/providers/${c.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isActive: newActive }),
-        }),
-      ),
-    );
+
+    const { failed, total } = await setConnectionsActive(providerConns, newActive);
+    await fetchConnections();
+    if (failed > 0) {
+      notify.error(
+        `${failed}/${total} connections could not be ${newActive ? "enabled" : "disabled"} — reloaded from the server`,
+      );
+    }
   };
 
   const handleBatchTest = async (mode, providerId = null) => {

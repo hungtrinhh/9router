@@ -2,13 +2,18 @@
  * Antigravity live quota cache — in-memory, refreshed on demand.
  * Used by auth.js pre-filter to skip accounts with exhausted model quota.
  * Also triggered by 409/429 error handler to sync exact resetAt from upstream.
+ *
+ * Entries are only trusted for QUOTA_CACHE_TTL_MS. Once an account is
+ * CACHE_BLOCKed the request never reaches upstream, so nothing ever refreshes
+ * that entry — without a TTL an account stays skipped for the whole upstream
+ * reset window even after its quota is restored or the user re-enables it.
  */
 
 import { resolveConnectionProxyConfig } from "@/lib/network/connectionProxy";
 import { getAntigravityUsage } from "open-sse/services/usage/google.js";
 import * as log from "../utils/logger.js";
 
-// In-memory cache: connectionId → { [modelId]: { remainingPercentage, resetAt } }
+// In-memory cache: connectionId → { quotas: { [modelId]: {...} }, fetchedAt }
 const quotaCache = new Map();
 // Track last refresh per connection to avoid hammering
 const lastRefreshAt = new Map();
@@ -16,6 +21,18 @@ const lastRefreshAt = new Map();
 const inflightRefresh = new Map();
 
 const MIN_REFRESH_INTERVAL_MS = 30_000; // 30s between refreshes per connection
+const QUOTA_CACHE_TTL_MS = 5 * 60 * 1000; // stale quota reads stop blocking routing
+
+// Read + expire one connection's cache entry.
+function getEntry(connectionId, now = Date.now()) {
+  const entry = quotaCache.get(connectionId);
+  if (!entry) return null;
+  if (now - entry.fetchedAt >= QUOTA_CACHE_TTL_MS) {
+    quotaCache.delete(connectionId);
+    return null;
+  }
+  return entry;
+}
 
 // Strike-based circuit breaker (#3681): Google's quota API can report remaining
 // quota while generation endpoints keep returning 429 (sprint/weekly dual-pool
@@ -60,18 +77,37 @@ export function clearAntigravityStrikes(connectionId, model) {
   const until = strikeBlocks.get(key);
   if (until === undefined) return;
   strikeBlocks.delete(key);
-  const cached = quotaCache.get(connectionId);
-  if (cached?.[model]?.resetAt === new Date(until).toISOString()) {
-    delete cached[model];
-    quotaCache.set(connectionId, cached);
+  const entry = quotaCache.get(connectionId);
+  if (entry?.quotas?.[model]?.resetAt === new Date(until).toISOString()) {
+    delete entry.quotas[model];
+    quotaCache.set(connectionId, entry);
   }
 }
 
 /**
- * Get the quota cache (read-only reference for auth.js pre-filter).
+ * Cached quota for one account/model, or null when unknown or stale.
+ * Callers treat null as "no data" and keep routing to that account.
  */
-export function getAntigravityQuotaCache() {
-  return quotaCache;
+export function getCachedAntigravityQuota(connectionId, model) {
+  if (!model) return null;
+  return getEntry(connectionId)?.quotas?.[model] || null;
+}
+
+/**
+ * Drop cached quota for a connection (all models) plus its refresh throttle and
+ * any strike-based block, so the next request goes upstream again. Used when a
+ * connection is re-enabled from the dashboard — a block recorded before the
+ * toggle no longer applies.
+ */
+export function clearAntigravityQuota(connectionId) {
+  quotaCache.delete(connectionId);
+  lastRefreshAt.delete(connectionId);
+  for (const key of [...strikeCounts.keys()]) {
+    if (key.startsWith(`${connectionId}|`)) strikeCounts.delete(key);
+  }
+  for (const key of [...strikeBlocks.keys()]) {
+    if (key.startsWith(`${connectionId}|`)) strikeBlocks.delete(key);
+  }
 }
 
 /**
@@ -88,7 +124,7 @@ export async function refreshAntigravityQuota(connectionId, accessToken, provide
   const lastRefresh = lastRefreshAt.get(connectionId) || 0;
   if (now - lastRefresh < MIN_REFRESH_INTERVAL_MS) {
     log.debug("AG_QUOTA", `${connectionId.slice(0, 8)} | skip refresh (${Math.round((now - lastRefresh) / 1000)}s ago)`);
-    return quotaCache.get(connectionId) || null;
+    return getEntry(connectionId, now)?.quotas || null;
   }
 
   // Record every attempt so failed quota calls cannot amplify an upstream 429 burst.
@@ -121,7 +157,7 @@ async function _doRefresh(connectionId, accessToken, providerSpecificData, now) 
     // Update in-memory cache. Caller logs CACHE_BLOCK only if requested model is exhausted.
     // Strike blocks are re-asserted after every refresh so an optimistic
     // upstream reading cannot resurrect a pair we just circuit-broke.
-    quotaCache.set(connectionId, applyActiveStrikeBlocks(connectionId, usage.quotas));
+    quotaCache.set(connectionId, { quotas: applyActiveStrikeBlocks(connectionId, usage.quotas), fetchedAt: now });
 
     return usage.quotas;
   } catch (e) {
@@ -166,9 +202,10 @@ export async function handleAntigravityQuotaError(connectionId, status, model, a
       // Synthesize a 0% entry in the shared cache so the auth pre-filter skips
       // this pair on subsequent requests too, not just the current retry loop
       // (the chat handler does not persist modelLock_* for this path).
-      const cached = quotaCache.get(connectionId) || {};
-      cached[model] = { remainingPercentage: 0, resetAt: new Date(blockedUntil).toISOString() };
-      quotaCache.set(connectionId, cached);
+      const entry = quotaCache.get(connectionId) || { quotas: {}, fetchedAt: now };
+      entry.quotas[model] = { remainingPercentage: 0, resetAt: new Date(blockedUntil).toISOString() };
+      entry.fetchedAt = now;
+      quotaCache.set(connectionId, entry);
       strikeBlocks.set(key, blockedUntil);
       return blockedUntil;
     }

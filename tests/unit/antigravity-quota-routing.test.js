@@ -27,15 +27,30 @@ vi.mock("open-sse/services/usage/google.js", () => ({
 }));
 vi.mock("@/sse/utils/logger.js", () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn() }));
 
-const { getAntigravityQuotaCache, handleAntigravityQuotaError, refreshAntigravityQuota, clearAntigravityStrikes } = await import("@/sse/services/antigravityQuota.js");
+const {
+  getCachedAntigravityQuota,
+  clearAntigravityQuota,
+  handleAntigravityQuotaError,
+  refreshAntigravityQuota,
+  clearAntigravityStrikes,
+} = await import("@/sse/services/antigravityQuota.js");
 const { getProviderCredentials } = await import("@/sse/services/auth.js");
 
 const MODEL = "claude-opus-4-6-thinking";
+const NOW = "2026-08-26T00:00:00.000Z";
 const FUTURE_RESET = "2026-09-01T00:00:00.000Z";
+const EXHAUSTED = { remainingPercentage: 0, resetAt: FUTURE_RESET };
+
+// Seed the cache the way production does: one upstream quota read.
+async function seedExhausted(connectionId) {
+  mocks.getAntigravityUsage.mockResolvedValueOnce({ quotas: { [MODEL]: EXHAUSTED } });
+  await refreshAntigravityQuota(connectionId, "token", {});
+}
+
+const account = (id) => ({ id, email: `${id}@example.com`, isActive: true });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  getAntigravityQuotaCache().clear();
   mocks.resolveConnectionProxyConfig.mockResolvedValue({});
   mocks.getSettings.mockResolvedValue({});
 });
@@ -43,18 +58,15 @@ beforeEach(() => {
 describe("Antigravity quota-aware routing", () => {
   it("records exhausted upstream quota after 429 and returns its exact reset time", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-26T00:00:00.000Z"));
-    mocks.getAntigravityUsage.mockResolvedValue({ quotas: {
-      [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET },
-    } });
+    vi.setSystemTime(new Date(NOW));
+    mocks.getAntigravityUsage.mockResolvedValue({
+      quotas: { [MODEL]: EXHAUSTED },
+    });
 
     try {
       await expect(handleAntigravityQuotaError("ag-a", 429, MODEL, "token", {}))
         .resolves.toBe(Date.parse(FUTURE_RESET));
-      expect(getAntigravityQuotaCache().get("ag-a")[MODEL]).toEqual({
-        remainingPercentage: 0,
-        resetAt: FUTURE_RESET,
-      });
+      expect(getCachedAntigravityQuota("ag-a", MODEL)).toEqual(EXHAUSTED);
     } finally {
       vi.useRealTimers();
     }
@@ -62,19 +74,14 @@ describe("Antigravity quota-aware routing", () => {
 
   it("skips exhausted account/model and selects the next account", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-26T00:00:00.000Z"));
-    mocks.getProviderConnections.mockResolvedValue([
-      { id: "ag-a", email: "a@example.com", isActive: true },
-      { id: "ag-b", email: "b@example.com", isActive: true },
-    ]);
-    getAntigravityQuotaCache().set("ag-a", {
-      [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET },
-    });
+    vi.setSystemTime(new Date(NOW));
+    mocks.getProviderConnections.mockResolvedValue([account("ag-skip-a"), account("ag-skip-b")]);
 
     try {
+      await seedExhausted("ag-skip-a");
       await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
-        connectionId: "ag-b",
-        connectionName: "b@example.com",
+        connectionId: "ag-skip-b",
+        connectionName: "ag-skip-b@example.com",
       });
     } finally {
       vi.useRealTimers();
@@ -83,13 +90,11 @@ describe("Antigravity quota-aware routing", () => {
 
   it("reports retry time when every account is cache-blocked", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-26T00:00:00.000Z"));
-    mocks.getProviderConnections.mockResolvedValue([{ id: "ag-a", email: "a@example.com", isActive: true }]);
-    getAntigravityQuotaCache().set("ag-a", {
-      [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET },
-    });
+    vi.setSystemTime(new Date(NOW));
+    mocks.getProviderConnections.mockResolvedValue([account("ag-locked-all")]);
 
     try {
+      await seedExhausted("ag-locked-all");
       await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
         allRateLimited: true,
         retryAfter: FUTURE_RESET,
@@ -101,16 +106,82 @@ describe("Antigravity quota-aware routing", () => {
 
   it("lets account back into rotation once reset time has passed", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-09-01T00:00:01.000Z"));
-    mocks.getProviderConnections.mockResolvedValue([{ id: "ag-a", email: "a@example.com", isActive: true }]);
-    getAntigravityQuotaCache().set("ag-a", {
-      [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET },
-    });
+    vi.setSystemTime(new Date(NOW));
+    mocks.getProviderConnections.mockResolvedValue([account("ag-reset-passed")]);
 
     try {
+      await seedExhausted("ag-reset-passed");
+      vi.setSystemTime(new Date("2026-09-01T00:00:01.000Z"));
       await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
-        connectionId: "ag-a",
-        connectionName: "a@example.com",
+        connectionId: "ag-reset-passed",
+        connectionName: "ag-reset-passed@example.com",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops blocking on a cached entry once it is stale", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
+    mocks.getProviderConnections.mockResolvedValue([account("ag-ttl")]);
+
+    try {
+      await seedExhausted("ag-ttl");
+      // resetAt is still in the future (2026-09-01); only the cache TTL expires,
+      // so the account must be tried upstream again instead of staying skipped.
+      vi.setSystemTime(new Date("2026-08-26T00:05:01.000Z"));
+      await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
+        connectionId: "ag-ttl",
+        connectionName: "ag-ttl@example.com",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("releases an account whose quota block was cleared (re-enabled in the dashboard)", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
+    mocks.getProviderConnections.mockResolvedValue([account("ag-cleared")]);
+
+    try {
+      await seedExhausted("ag-cleared");
+      clearAntigravityQuota("ag-cleared");
+      expect(getCachedAntigravityQuota("ag-cleared", MODEL)).toBeNull();
+      await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
+        connectionId: "ag-cleared",
+        connectionName: "ag-cleared@example.com",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("clears a strike block when the account is re-enabled", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
+    mocks.getProviderConnections.mockResolvedValue([account("ag-strike-clear")]);
+    // Quota API keeps claiming 90% while generation 429s, so the pair is
+    // circuit-broken by strikes rather than by an exhausted reading.
+    mocks.getAntigravityUsage.mockResolvedValue({ quotas: {
+      [MODEL]: { remainingPercentage: 90, resetAt: FUTURE_RESET },
+    } });
+
+    try {
+      for (let i = 0; i < 3; i++) {
+        await handleAntigravityQuotaError("ag-strike-clear", 429, MODEL, "token", {});
+      }
+      await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
+        allRateLimited: true,
+      });
+
+      // Re-enabling the account must drop the strike block too, otherwise it
+      // stays skipped for the remaining 15 minutes.
+      clearAntigravityQuota("ag-strike-clear");
+      await expect(getProviderCredentials("antigravity", null, MODEL)).resolves.toMatchObject({
+        connectionId: "ag-strike-clear",
+        connectionName: "ag-strike-clear@example.com",
       });
     } finally {
       vi.useRealTimers();
@@ -123,13 +194,14 @@ describe("Antigravity quota-aware routing", () => {
 
     const first = refreshAntigravityQuota("ag-concurrent", "token", {});
     const second = refreshAntigravityQuota("ag-concurrent", "token", {});
-    resolveUsage({ quotas: { [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET } } });
+    resolveUsage({ quotas: { [MODEL]: EXHAUSTED } });
 
     await expect(Promise.all([first, second])).resolves.toEqual([
-      { [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET } },
-      { [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET } },
+      { [MODEL]: EXHAUSTED },
+      { [MODEL]: EXHAUSTED },
     ]);
     expect(mocks.getAntigravityUsage).toHaveBeenCalledTimes(1);
+    expect(getCachedAntigravityQuota("ag-concurrent", MODEL)).toEqual(EXHAUSTED);
   });
 
   it("preserves strict proxy policy for usage refresh", async () => {
@@ -144,17 +216,25 @@ describe("Antigravity quota-aware routing", () => {
   });
 
   it("keeps known cache when quota endpoint returns an error payload", async () => {
-    const cached = { [MODEL]: { remainingPercentage: 0, resetAt: FUTURE_RESET } };
-    getAntigravityQuotaCache().set("ag-error-response", cached);
-    mocks.getAntigravityUsage.mockResolvedValue({ message: "Unauthorized", quotas: {} });
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW));
 
-    await expect(refreshAntigravityQuota("ag-error-response", "token", {})).resolves.toBeNull();
-    expect(getAntigravityQuotaCache().get("ag-error-response")).toBe(cached);
+    try {
+      await seedExhausted("ag-error-response");
+      mocks.getAntigravityUsage.mockResolvedValue({ message: "Unauthorized", quotas: {} });
+      // Step past the 30s refresh throttle so the upstream call actually happens.
+      vi.setSystemTime(new Date("2026-08-26T00:00:30.000Z"));
+
+      await expect(refreshAntigravityQuota("ag-error-response", "token", {})).resolves.toBeNull();
+      expect(getCachedAntigravityQuota("ag-error-response", MODEL)).toEqual(EXHAUSTED);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("throttles failed refresh attempts for 30 seconds", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-26T00:00:00.000Z"));
+    vi.setSystemTime(new Date(NOW));
     mocks.getAntigravityUsage.mockRejectedValue(new Error("usage unavailable"));
 
     try {
@@ -239,12 +319,12 @@ describe("Antigravity quota-aware routing", () => {
 
       // The synthesized entry must be visible to the auth pre-filter reading
       // the shared cache — and must survive an optimistic upstream refresh.
-      const cached = getAntigravityQuotaCache().get("ag-persist")?.[MODEL];
+      const cached = getCachedAntigravityQuota("ag-persist", MODEL);
       expect(cached).toMatchObject({ remainingPercentage: 0 });
       expect(Date.parse(cached.resetAt)).toBe(Date.parse("2026-08-26T00:15:00.000Z"));
 
       await refreshAntigravityQuota("ag-persist", "token", {});
-      expect(getAntigravityQuotaCache().get("ag-persist")?.[MODEL]).toMatchObject({
+      expect(getCachedAntigravityQuota("ag-persist", MODEL)).toMatchObject({
         remainingPercentage: 0,
       });
     } finally {
@@ -263,11 +343,11 @@ describe("Antigravity quota-aware routing", () => {
       await handleAntigravityQuotaError("ag-clear", 429, MODEL, "token", {});
       await handleAntigravityQuotaError("ag-clear", 429, MODEL, "token", {});
       await handleAntigravityQuotaError("ag-clear", 429, MODEL, "token", {});
-      expect(getAntigravityQuotaCache().get("ag-clear")?.[MODEL]?.remainingPercentage).toBe(0);
+      expect(getCachedAntigravityQuota("ag-clear", MODEL)?.remainingPercentage).toBe(0);
 
       clearAntigravityStrikes("ag-clear", MODEL);
       // Synthesized entry gone — pair selectable again immediately.
-      expect(getAntigravityQuotaCache().get("ag-clear")?.[MODEL]).toBeUndefined();
+      expect(getCachedAntigravityQuota("ag-clear", MODEL)).toBeNull();
 
       // Two more 429s do NOT inherit earlier strikes: no block on the third-in-episode.
       await handleAntigravityQuotaError("ag-clear", 429, MODEL, "token", {});
@@ -306,6 +386,6 @@ describe("Antigravity quota-aware routing", () => {
       .resolves.toBeNull();
     // Optimistic reading must NOT poison the shared cache (auth pre-filter
     // treats cached 0% as exhausted).
-    expect(getAntigravityQuotaCache().get("ag-optimistic")?.[MODEL]?.remainingPercentage).toBe(90);
+    expect(getCachedAntigravityQuota("ag-optimistic", MODEL)?.remainingPercentage).toBe(90);
   });
 });
