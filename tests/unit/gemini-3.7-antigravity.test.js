@@ -44,10 +44,10 @@ describe("Gemini 3.7 & 3.8 Flash Support & Config (#3286, #3281)", () => {
     expect(MODEL_PRICING["gemini-3.7-flash-medium"]).toEqual(MODEL_PRICING["gemini-3.6-flash-medium"]);
     expect(MODEL_PRICING["gemini-3.7-flash-low"]).toEqual(MODEL_PRICING["gemini-3.6-flash-low"]);
 
-    expect(MODEL_PRICING["gemini-3.8-flash"].input).toBe(0.75);
-    expect(MODEL_PRICING["gemini-3.8-flash"].output).toBe(3.75);
-    expect(MODEL_PRICING["gemini-3.8-flash-high"].input).toBe(0.75);
-    expect(MODEL_PRICING["gemini-3.8-flash-high"].output).toBe(3.75);
+    expect(MODEL_PRICING["gemini-3.8-flash"].input).toBe(1.5);
+    expect(MODEL_PRICING["gemini-3.8-flash"].output).toBe(7.5);
+    expect(MODEL_PRICING["gemini-3.8-flash-high"].input).toBe(1.5);
+    expect(MODEL_PRICING["gemini-3.8-flash-high"].output).toBe(7.5);
   });
 
   it("normalizes contents and removes empty parts when an assistant message has thought-only content", () => {
