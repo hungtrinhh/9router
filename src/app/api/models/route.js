@@ -11,57 +11,76 @@ export async function GET() {
     const modelAliases = await getModelAliases();
     const disabled = await getDisabledModels();
 
-    const models = AI_MODELS
-      .filter((m) => {
-        const alias = getProviderAlias(m.provider) || m.provider;
-        const list = disabled[alias] || disabled[m.provider] || [];
-        return !list.includes(m.model);
-      })
-      .map((m) => {
-        const fullModel = `${m.provider}/${m.model}`;
-        const providerAlias = getProviderAlias(m.provider) || m.provider;
-        const routedModel = `${providerAlias}/${m.model}`;
-        const c = resolveModelCaps(routedModel);
-        return {
-          ...m,
-          fullModel,
-          routedModel,
-          alias: modelAliases[fullModel] || m.model,
-          caps: {
-            vision: c.vision,
-            search: c.search,
-            reasoning: c.reasoning,
-            contextWindow: c.contextWindow,
-            maxOutput: c.maxOutput,
-          },
-        };
-      });
+    // One row per routable id. The catalog lists a few ids twice (gemini's STT
+    // rows reuse the LLM ids) and AI_MODELS drops `kind`, so nothing downstream
+    // could tell the repeats apart.
+    const models = [];
+    const byRoute = new Map(); // id form and alias form -> entry
 
-    // Custom models ride along; their stored caps override the name heuristic
-    const seenFull = new Set(models.map((m) => m.fullModel));
-    const customModels = (await getCustomModels()).filter((m) => {
-      if (!m?.id || (m.kind || m.type || "llm") !== "llm") return false;
-      return !seenFull.has(`${m.providerAlias}/${m.id}`);
-    });
-    for (const m of customModels) {
-      const fullModel = `${m.providerAlias}/${m.id}`;
-      const c = getCapabilitiesForModel(m.providerAlias, m.id);
-      models.push({
-        provider: m.providerAlias,
-        model: m.id,
-        name: m.name || m.id,
+    for (const m of AI_MODELS) {
+      const providerAlias = getProviderAlias(m.provider) || m.provider;
+      const list = disabled[providerAlias] || disabled[m.provider] || [];
+      if (list.includes(m.model)) continue;
+
+      const fullModel = `${m.provider}/${m.model}`;
+      const routedModel = `${providerAlias}/${m.model}`;
+      if (byRoute.has(fullModel) || byRoute.has(routedModel)) continue;
+
+      const c = resolveModelCaps(routedModel);
+      const entry = {
+        ...m,
         fullModel,
-        routedModel: fullModel,
-        alias: modelAliases[fullModel] || m.id,
+        routedModel,
+        alias: modelAliases[fullModel] || m.model,
         caps: {
           vision: c.vision,
           search: c.search,
           reasoning: c.reasoning,
           contextWindow: c.contextWindow,
           maxOutput: c.maxOutput,
-          ...(m.caps || {}),
         },
-      });
+      };
+      byRoute.set(fullModel, entry);
+      byRoute.set(routedModel, entry);
+      models.push(entry);
+    }
+
+    // Custom models ride along; their stored caps override the name heuristic.
+    // Catalog rows carry the provider id in `fullModel` and the routing alias in
+    // `routedModel` — those differ for ~28 providers — while custom models are
+    // stored under the alias, so either form must match or an alias-registered
+    // custom model lands as a second copy of a row already in the list.
+    for (const m of await getCustomModels()) {
+      if (!m?.id || (m.kind || m.type || "llm") !== "llm") continue;
+
+      const fullModel = `${m.providerAlias}/${m.id}`;
+      const c = resolveModelCaps(fullModel);
+      const caps = {
+        vision: c.vision,
+        search: c.search,
+        reasoning: c.reasoning,
+        contextWindow: c.contextWindow,
+        maxOutput: c.maxOutput,
+        ...(m.caps || {}),
+      };
+
+      const existing = byRoute.get(fullModel);
+      if (existing) {
+        existing.caps = caps;
+        continue;
+      }
+
+      const entry = {
+        provider: m.providerAlias,
+        model: m.id,
+        name: m.name || m.id,
+        fullModel,
+        routedModel: fullModel,
+        alias: modelAliases[fullModel] || m.id,
+        caps,
+      };
+      byRoute.set(fullModel, entry);
+      models.push(entry);
     }
 
     return NextResponse.json({ models });
