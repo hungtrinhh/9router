@@ -1,3 +1,8 @@
+# v0.5.103 (2026-09-13)
+
+## Fixes
+- **Antigravity false `429 RESOURCE_EXHAUSTED` on agent prompts**: Google's Cloud Code backend content-inspects `systemInstruction` on Antigravity requests and answers a generic 429 (no `RetryInfo`, no reset hint) whenever the prompt carries a spec-citation block that agent harnesses (oh-my-pi, Claude Code, Hermes) ship by default — `RFC 2119: MUST, REQUIRED, SHOULD, RECOMMENDED, MAY, OPTIONAL.` inside a `<system-conventions>` wrapper. The 429 hits **every** account in the pool, so multi-account fallback burned the whole pool per turn and looked exactly like quota exhaustion (upstream #3274 / #3358, oh-my-pi #11689). `ANTIGRAVITY_PROMPT_REWRITES` now neutralizes both triggers: `RFC 2119` gets an invisible zero-width space and the `<system-conventions>` wrapper is renamed to `<system_conventions>`, applied to system-prompt parts only. Verified against the live endpoint with a 3.6 KB harness-style prompt + 12 tools on `ag/gemini-3.8-flash-{high,medium,low}`: identical payload 429s plain and streams 200 rewritten
+
 # v0.5.102 (2026-09-12)
 
 ## Fixes
