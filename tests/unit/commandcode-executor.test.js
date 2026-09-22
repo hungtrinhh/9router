@@ -132,6 +132,60 @@ describe("inspectAndWrapCommandCodeResponse", () => {
     expect(text).toContain("Hello from Laguna");
     expect(text).toContain("data: [DONE]");
   });
+
+  it("still emits a usage-bearing terminal chunk when upstream closes without finish", async () => {
+    // Verbatim live frames minus the trailing `finish` (truncated upstream): usage from
+    // the last finish-step must survive to the client instead of vanishing.
+    const ndjsonBody = createNdjsonStream([
+      JSON.stringify({ type: "text-delta", text: "partial answer" }) + "\n",
+      JSON.stringify({
+        type: "finish-step",
+        finishReason: "length",
+        usage: { inputTokens: 2079, inputTokenDetails: { noCacheTokens: 159, cacheReadTokens: 1920 }, outputTokens: 16, totalTokens: 2095, cachedInputTokens: 1920 },
+      }) + "\n",
+    ]);
+
+    const fakeResponse = new Response(ndjsonBody, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+
+    const result = await inspectAndWrapCommandCodeResponse(fakeResponse, "deepseek/deepseek-v4.1-flash");
+    const text = await result.text();
+    expect(text).toContain("partial answer");
+
+    const dataLines = text.split("\n").filter((l) => l.startsWith("data: ") && !l.includes("[DONE]"));
+    const chunks = dataLines.map((l) => JSON.parse(l.slice(6)));
+    const usageChunks = chunks.filter((c) => c.usage);
+    expect(usageChunks).toHaveLength(1);
+    expect(usageChunks[0].usage.prompt_tokens_details.cached_tokens).toBe(1920);
+    expect(usageChunks[0].choices[0].finish_reason).toBe("length");
+    expect(text).toContain("data: [DONE]");
+  });
+
+  it("emits usage exactly once on a normal finish-terminated stream", async () => {
+    const ndjsonBody = createNdjsonStream([
+      JSON.stringify({ type: "text-delta", text: "done" }) + "\n",
+      JSON.stringify({ type: "finish-step", finishReason: "stop", usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 } }) + "\n",
+      JSON.stringify({ type: "finish", finishReason: "stop", totalUsage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, cachedInputTokens: 4 } }) + "\n",
+    ]);
+
+    const fakeResponse = new Response(ndjsonBody, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    });
+
+    const result = await inspectAndWrapCommandCodeResponse(fakeResponse, "deepseek/deepseek-v4.1-flash");
+    const text = await result.text();
+    const chunks = text
+      .split("\n")
+      .filter((l) => l.startsWith("data: ") && !l.includes("[DONE]"))
+      .map((l) => JSON.parse(l.slice(6)));
+    const usageChunks = chunks.filter((c) => c.usage);
+    expect(usageChunks).toHaveLength(1);
+    expect(usageChunks[0].usage.prompt_tokens_details.cached_tokens).toBe(4);
+    expect(usageChunks[0].usage.total_tokens).toBe(15);
+  });
 });
 
 describe("CommandCode in Combo Fallback", () => {

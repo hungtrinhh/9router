@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { commandCodeToOpenAIResponse } from "../../open-sse/translator/response/commandcode-to-openai.js";
+import { commandCodeToOpenAIResponse, finalizeCommandCodeStream } from "../../open-sse/translator/response/commandcode-to-openai.js";
 
 function feed(events) {
   const state = {};
@@ -112,6 +112,65 @@ describe("commandcode-to-openai — finish", () => {
     ]);
     const last = chunks[chunks.length - 1];
     expect(last.usage).toEqual({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+  });
+
+  it("surfaces prompt-cache reads from totalUsage (live AI SDK v5 shape)", () => {
+    // Verbatim finish frame from a live cache-hit request (2026-09-22); prompt_tokens
+    // stays cache-inclusive, cached_tokens is the subset served from cache.
+    const { chunks } = feed([
+      { type: "text-delta", text: "hi" },
+      { type: "finish-step", finishReason: "stop", usage: { inputTokens: 2079, outputTokens: 16, totalTokens: 2095, cachedInputTokens: 1920 } },
+      { type: "finish", totalUsage: { inputTokens: 2079, inputTokenDetails: { noCacheTokens: 159, cacheReadTokens: 1920 }, outputTokens: 16, totalTokens: 2095, cachedInputTokens: 1920 } },
+    ]);
+    const last = chunks[chunks.length - 1];
+    expect(last.usage.prompt_tokens).toBe(2079);
+    expect(last.usage.prompt_tokens_details.cached_tokens).toBe(1920);
+  });
+
+  it("surfaces reasoning tokens as a completion subset", () => {
+    const { chunks } = feed([
+      { type: "text-delta", text: "hi" },
+      { type: "finish", totalUsage: { inputTokens: 2079, outputTokens: 16, totalTokens: 2095, reasoningTokens: 16 } },
+    ]);
+    const last = chunks[chunks.length - 1];
+    expect(last.usage.completion_tokens).toBe(16);
+    expect(last.usage.completion_tokens_details.reasoning_tokens).toBe(16);
+  });
+});
+
+describe("commandcode-to-openai — finalizeCommandCodeStream", () => {
+  it("emits a terminal chunk with usage when upstream never sent finish", () => {
+    const state = {};
+    const chunks = [];
+    for (const e of [
+      { type: "text-delta", text: "partial" },
+      { type: "finish-step", finishReason: "length", usage: { inputTokens: 2079, outputTokens: 16, totalTokens: 2095, cachedInputTokens: 1920 } },
+    ]) {
+      const out = commandCodeToOpenAIResponse(e, state);
+      if (out) chunks.push(...out);
+    }
+    const tail = finalizeCommandCodeStream(state);
+    expect(tail).toHaveLength(1);
+    expect(tail[0].choices[0].finish_reason).toBe("length");
+    expect(tail[0].usage.prompt_tokens_details.cached_tokens).toBe(1920);
+    // Idempotent: a second flush must not duplicate the terminal chunk
+    expect(finalizeCommandCodeStream(state)).toBeNull();
+  });
+
+  it("does not duplicate the terminal chunk after finish or error", () => {
+    const afterFinish = {};
+    commandCodeToOpenAIResponse({ type: "text-delta", text: "hi" }, afterFinish);
+    commandCodeToOpenAIResponse({ type: "finish", totalUsage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }, afterFinish);
+    expect(finalizeCommandCodeStream(afterFinish)).toBeNull();
+
+    const afterError = {};
+    commandCodeToOpenAIResponse({ type: "error", error: "boom" }, afterError);
+    expect(finalizeCommandCodeStream(afterError)).toBeNull();
+  });
+
+  it("returns null when no upstream event was ever processed", () => {
+    expect(finalizeCommandCodeStream({})).toBeNull();
+    expect(finalizeCommandCodeStream(undefined)).toBeNull();
   });
 });
 

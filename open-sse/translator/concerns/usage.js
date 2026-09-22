@@ -57,7 +57,27 @@ const USAGE_EXTRACTORS = {
   commandcode(raw) {
     const input = n(raw.inputTokens), output = n(raw.outputTokens);
     const total = typeof raw.totalTokens === "number" ? raw.totalTokens : input + output;
-    return { promptTokens: input, completionTokens: output, totalTokens: total };
+    // AI SDK v5 prompt-cache reads, verified live 2026-09-22 against
+    // /alpha/generate (deepseek/deepseek-v4.1-flash):
+    //   finish.totalUsage.cachedInputTokens          = 1920
+    //   finish.totalUsage.inputTokenDetails.cacheReadTokens = 1920 (noCacheTokens 159)
+    //   finish-step.usage.raw.prompt_tokens_details.cached_tokens = 1920
+    // inputTokens stays cache-INCLUSIVE there (159 + 1920 = 2079 prompt_tokens),
+    // i.e. the OpenAI convention buildUsage() forwards, so cached is a subset.
+    const cached = n(raw.cachedInputTokens)
+      || n(raw.inputTokenDetails?.cacheReadTokens)
+      || n(raw.raw?.prompt_tokens_details?.cached_tokens)
+      || n(raw.raw?.prompt_cache_hit_tokens);
+    // Same three shapes for reasoning: outputTokenDetails.textTokens + reasoningTokens
+    // sum to outputTokens (live: 0 + 16 = 16), so reasoning is a completion subset
+    // and buildUsage forwards it as completion_tokens_details.reasoning_tokens.
+    const reasoning = n(raw.reasoningTokens)
+      || n(raw.outputTokenDetails?.reasoningTokens)
+      || n(raw.raw?.completion_tokens_details?.reasoning_tokens);
+    const out = { promptTokens: input, completionTokens: output, totalTokens: total };
+    if (cached > 0) out.cachedTokens = cached;
+    if (reasoning > 0) out.reasoningTokens = reasoning;
+    return out;
   },
 };
 

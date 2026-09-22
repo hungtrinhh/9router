@@ -35,6 +35,7 @@ function ensureState(state, model) {
     state.openTools = new Set();
     state.openText = false;
     state.finishReason = null;
+    state.finishEmitted = false;
     state.usage = null;
   }
 }
@@ -161,11 +162,13 @@ export function commandCodeToOpenAIResponse(chunk, state) {
       const totalUsage = event.totalUsage || state.usage;
       const usage = toOpenAIUsage(totalUsage, "commandcode");
       if (usage) finalChunk.usage = usage;
+      state.finishEmitted = true;
       out.push(finalChunk);
       break;
     }
     case "error": {
       state.finishReason = OPENAI_FINISH.STOP;
+      state.finishEmitted = true;
       const errVal = event.error ?? event.message ?? "unknown";
       const errStr = typeof errVal === "string" ? errVal : JSON.stringify(errVal);
       out.push(makeChunk(state, { content: `\n\n[CommandCode error: ${errStr}]` }));
@@ -179,6 +182,26 @@ export function commandCodeToOpenAIResponse(chunk, state) {
   }
 
   return out.length ? out : null;
+}
+
+/**
+ * Terminal chunk for a stream that closed WITHOUT a `finish` event (upstream
+ * aborted/truncated, or a shape that only ever sends finish-step). The executor's
+ * stream flush calls this so the final chunk — and with it the usage captured from
+ * the last finish-step — still reaches the client and the usage DB instead of
+ * vanishing with the missing frame. Returns null when finish/error already emitted
+ * one, so the normal path stays single-usage.
+ *
+ * Caveat: state.usage is the LAST step's usage, not cumulative — only used when
+ * no authoritative finish.totalUsage arrived.
+ */
+export function finalizeCommandCodeStream(state) {
+  if (!state?.responseId || state.finishEmitted) return null;
+  state.finishEmitted = true;
+  const finalChunk = makeChunk(state, {}, state.finishReason || OPENAI_FINISH.STOP);
+  const usage = toOpenAIUsage(state.usage, "commandcode");
+  if (usage) finalChunk.usage = usage;
+  return [finalChunk];
 }
 
 register(FORMATS.COMMANDCODE, FORMATS.OPENAI, null, commandCodeToOpenAIResponse);

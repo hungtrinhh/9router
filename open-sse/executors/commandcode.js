@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { BaseExecutor } from "./base.js";
 import { PROVIDERS } from "../config/providers.js";
-import { commandCodeToOpenAIResponse } from "../translator/response/commandcode-to-openai.js";
+import { commandCodeToOpenAIResponse, finalizeCommandCodeStream } from "../translator/response/commandcode-to-openai.js";
 import { SSE_DONE } from "../utils/sseConstants.js";
 
 /**
@@ -301,6 +301,9 @@ function wrapNdjsonAsOpenAISse(streamBody, model, originalResponse = null) {
       if (trimmed) {
         emitChunks(commandCodeToOpenAIResponse(trimmed, state), controller);
       }
+      // Upstream closed without `finish` (truncation/abort): still hand the client a
+      // terminal chunk carrying the usage seen so far, then [DONE].
+      emitChunks(finalizeCommandCodeStream(state), controller);
       controller.enqueue(encoder.encode(SSE_DONE));
     },
   });

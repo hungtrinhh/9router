@@ -1,3 +1,9 @@
+# v0.5.104 (2026-09-22)
+
+## Fixes
+- **CommandCode**: surface prompt-cache and reasoning usage from the AI SDK v5 stream frames — `cachedInputTokens` / `inputTokenDetails.cacheReadTokens` / `raw.prompt_tokens_details.cached_tokens` now map to `prompt_tokens_details.cached_tokens` (prompt_tokens stays cache-inclusive) and `reasoningTokens` to `completion_tokens_details.reasoning_tokens`, so cache hits reach the client, the `DONE … (CACHE ↻N)` log line, the usage dashboard and cost calculation instead of always reading zero
+- **CommandCode**: emit a terminal chunk carrying the usage seen so far when upstream closes the stream without a `finish` event (truncated/aborted response), so a cut-off stream no longer loses its token accounting
+
 # v0.5.103 (2026-09-13)
 
 ## Fixes
