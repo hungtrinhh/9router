@@ -21,6 +21,7 @@ export default function BashSetupButton({
   smolModel = "",
   slowModel = "",
   planModel = "",
+  subagentModel = "",
   modelRoles = null,
   models = [],
   variant = "secondary",
@@ -51,6 +52,7 @@ export default function BashSetupButton({
         if (smolModel) modelArgs += ` -SmolModel ${psQuote(smolModel)}`;
         if (slowModel) modelArgs += ` -SlowModel ${psQuote(slowModel)}`;
         if (planModel) modelArgs += ` -PlanModel ${psQuote(planModel)}`;
+        if (subagentModel) modelArgs += ` -SubagentModel ${psQuote(subagentModel)}`;
         if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
           const rolesJson = JSON.stringify(modelRoles);
           const rolesB64 = typeof window !== "undefined" && window.btoa ? window.btoa(unescape(encodeURIComponent(rolesJson))) : Buffer.from(rolesJson).toString("base64");
@@ -71,6 +73,7 @@ export default function BashSetupButton({
         if (smolModel) shModelArgs += ` --smol-model ${shellQuote(smolModel)}`;
         if (slowModel) shModelArgs += ` --slow-model ${shellQuote(slowModel)}`;
         if (planModel) shModelArgs += ` --plan-model ${shellQuote(planModel)}`;
+        if (subagentModel) shModelArgs += ` --subagent-model ${shellQuote(subagentModel)}`;
         if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
           shModelArgs += ` --model-roles ${shellQuote(JSON.stringify(modelRoles))}`;
         }
@@ -110,6 +113,7 @@ export default function BashSetupButton({
     if (smolModel) shModelArgs += ` --smol-model ${shellQuote(smolModel)}`;
     if (slowModel) shModelArgs += ` --slow-model ${shellQuote(slowModel)}`;
     if (planModel) shModelArgs += ` --plan-model ${shellQuote(planModel)}`;
+    if (subagentModel) shModelArgs += ` --subagent-model ${shellQuote(subagentModel)}`;
     if (modelRoles && typeof modelRoles === "object" && Object.keys(modelRoles).length > 0) {
       shModelArgs += ` --model-roles ${shellQuote(JSON.stringify(modelRoles))}`;
     }

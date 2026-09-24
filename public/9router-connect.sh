@@ -89,6 +89,11 @@ while [ "$#" -gt 0 ]; do
       PLAN_MODEL="$2"
       shift 2
       ;;
+    --subagent-model)
+      need_value "$@"
+      SUBAGENT_MODEL="$2"
+      shift 2
+      ;;
     --model-roles)
       need_value "$@"
       MODEL_ROLES="$2"
@@ -199,6 +204,7 @@ export NINEROUTER_CONNECT_MODEL="$MODEL"
 export NINEROUTER_CONNECT_SMOL_MODEL="$SMOL_MODEL"
 export NINEROUTER_CONNECT_SLOW_MODEL="$SLOW_MODEL"
 export NINEROUTER_CONNECT_PLAN_MODEL="$PLAN_MODEL"
+export NINEROUTER_CONNECT_SUBAGENT_MODEL="${SUBAGENT_MODEL:-}"
 export NINEROUTER_CONNECT_MODEL_ROLES="${MODEL_ROLES:-}"
 export NINEROUTER_CONNECT_SUBAGENTS="$SUBAGENTS"
 export NINEROUTER_CONNECT_MODELS="$MODELS_LIST"
@@ -217,6 +223,11 @@ tool = sys.argv[1]
 base_url = os.environ["NINEROUTER_CONNECT_URL"]
 api_key = os.environ["NINEROUTER_CONNECT_KEY"]
 model = os.environ["NINEROUTER_CONNECT_MODEL"]
+subagent_model = os.environ.get("NINEROUTER_CONNECT_SUBAGENT_MODEL", "").strip()
+models_raw = os.environ.get("NINEROUTER_CONNECT_MODELS", "").strip()
+all_opencode_models = []
+active_opencode_model = ""
+effective_subagent = ""
 home = Path(os.environ["NINEROUTER_CONNECT_HOME"]).expanduser()
 stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
 
@@ -284,15 +295,44 @@ elif tool == "opencode":
     provider = providers.setdefault("9router", {})
     provider.setdefault("npm", "@ai-sdk/openai-compatible")
     provider["options"] = {**provider.get("options", {}), "baseURL": base_url, "apiKey": api_key}
+
     if model:
-        models = provider.setdefault("models", {})
-        models[model] = {
-            "name": model,
+        all_opencode_models.append(model.strip())
+    if models_raw:
+        for m in models_raw.split(","):
+            m = m.strip()
+            if m and m not in all_opencode_models:
+                all_opencode_models.append(m)
+    if subagent_model and subagent_model not in all_opencode_models:
+        all_opencode_models.append(subagent_model)
+
+    provider_models = provider.get("models")
+    if not isinstance(provider_models, dict):
+        provider_models = {}
+        provider["models"] = provider_models
+
+    for mid in all_opencode_models:
+        provider_models[mid] = {
+            "name": mid,
             "modalities": {"input": ["text", "image"], "output": ["text"]},
         }
-        config["model"] = f"9router/{model}"
-    write_json(path, config)
 
+    active_opencode_model = model or (all_opencode_models[0] if all_opencode_models else "")
+    if active_opencode_model:
+        config["model"] = f"9router/{active_opencode_model}"
+
+    effective_subagent = subagent_model or active_opencode_model
+    if effective_subagent:
+        agents = config.setdefault("agent", {})
+        if not isinstance(agents, dict):
+            agents = {}
+            config["agent"] = agents
+        agents["explorer"] = {
+            "description": "Fast explorer subagent for codebase exploration",
+            "mode": "subagent",
+            "model": f"9router/{effective_subagent}",
+        }
+    write_json(path, config)
 elif tool == "omp":
     directory = home / ".omp" / "agent"
     directory.mkdir(parents=True, exist_ok=True)
@@ -563,12 +603,13 @@ else:
         print("  Timeout:         600,000 ms (10 min)")
     elif tool == "opencode":
         print("\n--- OpenCode Configuration ---")
-        if model:
-            print(f"  Active Model:    9router/{model}")
-        if models_raw:
-            print(f"  Registered:      {models_raw}")
+        if active_opencode_model:
+            print(f"  Active Model:    9router/{active_opencode_model}")
+        if effective_subagent:
+            print(f"  Subagent Model:  9router/{effective_subagent}")
+        if all_opencode_models:
+            print(f"  Configured ({len(all_opencode_models)}):  {', '.join(all_opencode_models)}")
     elif tool == "codex":
-        print("\n--- Codex Configuration ---")
         print(f"  Auth Path:       {auth_path}")
         if model:
             print(f"  Primary Model:   {model}")

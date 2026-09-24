@@ -1,3 +1,9 @@
+# v0.5.105 (2026-09-24)
+
+## Fixes
+- **OpenCode CLI Installers (`.bat` / `.ps1` / `.sh`)**: fix PowerShell variable collision where assigning to local `$models` coerced the existing `models` PSCustomObject into a string array `["@{...}"]` due to case-insensitive collision with `[string[]]$Models`, corrupting `~/.config/opencode/opencode.json`
+- **OpenCode CLI Multi-Model & Subagent Support**: pass all configured models (`models`) and subagent model (`subagentModel`) from `OpenCodeToolCard` through `BashSetupButton` into `-Models` / `--models` and `-SubagentModel` / `--subagent-model`, registering all selected models in `provider.9router.models` and setting `agent.explorer` subagent in `opencode.json`
+
 # v0.5.104 (2026-09-22)
 
 ## Fixes

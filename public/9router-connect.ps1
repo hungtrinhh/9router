@@ -15,6 +15,7 @@ param(
   [string]$SlowModel = "",
 
   [string]$PlanModel = "",
+  [string]$SubagentModel = "",
 
   [string]$ModelRolesJson = "",
   [string]$ModelRolesBase64 = "",
@@ -184,34 +185,90 @@ elseif ($Tool -eq "opencode") {
   Backup-ConfigFile $path
 
   $providers = $config.PSObject.Properties["provider"].Value
-  if ($null -eq $providers) {
+  if ($null -eq $providers -or $providers -isnot [PSCustomObject]) {
     $providers = [PSCustomObject]@{}
     Set-ObjectProperty $config "provider" $providers
   }
   $provider = $providers.PSObject.Properties["9router"].Value
-  if ($null -eq $provider) {
+  if ($null -eq $provider -or $provider -isnot [PSCustomObject]) {
     $provider = [PSCustomObject]@{}
     Set-ObjectProperty $providers "9router" $provider
   }
   Set-ObjectProperty $provider "npm" "@ai-sdk/openai-compatible"
 
   $options = $provider.PSObject.Properties["options"].Value
-  if ($null -eq $options) { $options = [PSCustomObject]@{} }
+  if ($null -eq $options -or $options -isnot [PSCustomObject]) { $options = [PSCustomObject]@{} }
   Set-ObjectProperty $options "baseURL" $BaseUrl
   Set-ObjectProperty $options "apiKey" $ApiKey
   Set-ObjectProperty $provider "options" $options
 
+  $providerModels = $provider.PSObject.Properties["models"].Value
+  if ($null -eq $providerModels -or $providerModels -isnot [PSCustomObject]) {
+    $providerModels = [PSCustomObject]@{}
+  }
+
+  $allOpencodeModelIds = New-Object System.Collections.Generic.List[string]
   if (-not [string]::IsNullOrWhiteSpace($Model)) {
-    $models = $provider.PSObject.Properties["models"].Value
-    if ($null -eq $models) { $models = [PSCustomObject]@{} }
+    $allOpencodeModelIds.Add($Model.Trim())
+  }
+  if ($null -ne $Models -and $Models.Count -gt 0) {
+    foreach ($m in $Models) {
+      if (-not [string]::IsNullOrWhiteSpace($m)) {
+        $trimmedM = $m.Trim()
+        if (-not $allOpencodeModelIds.Contains($trimmedM)) {
+          $allOpencodeModelIds.Add($trimmedM)
+        }
+      }
+    }
+  }
+  if (-not [string]::IsNullOrWhiteSpace($SubagentModel)) {
+    $trimmedSub = $SubagentModel.Trim()
+    if (-not $allOpencodeModelIds.Contains($trimmedSub)) {
+      $allOpencodeModelIds.Add($trimmedSub)
+    }
+  }
+
+  foreach ($mid in $allOpencodeModelIds) {
     $modelConfig = [PSCustomObject]@{
-      name = $Model
+      name = $mid
       modalities = [PSCustomObject]@{ input = @("text", "image"); output = @("text") }
     }
-    Set-ObjectProperty $models $Model $modelConfig
-    Set-ObjectProperty $provider "models" $models
-    Set-ObjectProperty $config "model" "9router/$Model"
+    Set-ObjectProperty $providerModels $mid $modelConfig
   }
+  Set-ObjectProperty $provider "models" $providerModels
+
+  $activeOpencodeModel = if (-not [string]::IsNullOrWhiteSpace($Model)) {
+    $Model.Trim()
+  } elseif ($allOpencodeModelIds.Count -gt 0) {
+    $allOpencodeModelIds[0]
+  } else {
+    ""
+  }
+  if (-not [string]::IsNullOrWhiteSpace($activeOpencodeModel)) {
+    Set-ObjectProperty $config "model" "9router/$activeOpencodeModel"
+  }
+
+  $effectiveSubagent = if (-not [string]::IsNullOrWhiteSpace($SubagentModel)) {
+    $SubagentModel.Trim()
+  } elseif (-not [string]::IsNullOrWhiteSpace($activeOpencodeModel)) {
+    $activeOpencodeModel
+  } else {
+    ""
+  }
+  if (-not [string]::IsNullOrWhiteSpace($effectiveSubagent)) {
+    $agentObj = $config.PSObject.Properties["agent"].Value
+    if ($null -eq $agentObj -or $agentObj -isnot [PSCustomObject]) {
+      $agentObj = [PSCustomObject]@{}
+      Set-ObjectProperty $config "agent" $agentObj
+    }
+    $explorerObj = [PSCustomObject]@{
+      description = "Fast explorer subagent for codebase exploration"
+      mode = "subagent"
+      model = "9router/$effectiveSubagent"
+    }
+    Set-ObjectProperty $agentObj "explorer" $explorerObj
+  }
+
   Write-JsonObject $path $config
 }
 elseif ($Tool -eq "omp") {
@@ -559,11 +616,14 @@ if ($Tool -eq "omp") {
 } elseif ($Tool -eq "opencode") {
   Write-Host ""
   Write-Host "--- OpenCode Configuration ---" -ForegroundColor Cyan
-  if (-not [string]::IsNullOrWhiteSpace($Model)) {
-    Write-Host "  Active Model:    " -NoNewline; Write-Host "9router/$Model" -ForegroundColor White
+  if (-not [string]::IsNullOrWhiteSpace($activeOpencodeModel)) {
+    Write-Host "  Active Model:    " -NoNewline; Write-Host "9router/$activeOpencodeModel" -ForegroundColor White
   }
-  if ($null -ne $Models -and $Models.Count -gt 0) {
-    Write-Host "  Registered:      " -NoNewline; Write-Host ($Models -join ", ") -ForegroundColor Gray
+  if (-not [string]::IsNullOrWhiteSpace($effectiveSubagent)) {
+    Write-Host "  Subagent Model:  " -NoNewline; Write-Host "9router/$effectiveSubagent" -ForegroundColor White
+  }
+  if ($allOpencodeModelIds.Count -gt 0) {
+    Write-Host "  Configured ($($allOpencodeModelIds.Count)):  " -NoNewline; Write-Host ($allOpencodeModelIds -join ", ") -ForegroundColor Gray
   }
 } elseif ($Tool -eq "codex") {
   Write-Host ""
