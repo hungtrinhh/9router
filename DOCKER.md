@@ -64,6 +64,14 @@ docker run -d \
   decolua/9router:latest
 ```
 
+Provider OAuth logins (Google/Gemini, Claude, GitLab, ...) redirect the browser back to `/callback` on this app. When the container sits behind a reverse proxy on a custom domain, set the public URL so the authorization code is not lost on a loopback address:
+
+```bash
+-e OAUTH_REDIRECT_URI=https://router.example.com/callback
+```
+
+Without it the callback defaults to `BASE_URL`, then to the origin of the incoming request (honoring `X-Forwarded-Proto`/`X-Forwarded-Host`).
+
 ## Optional Headroom sidecar
 
 The 9Router image does not bundle Python or Headroom. To use Headroom in Docker, run it as a separate service and point 9Router at that proxy:

@@ -42,6 +42,7 @@ import {
   clearXiaomiMimoSession,
 } from "@/lib/oauth/utils/server";
 import { detectIdeInstalled } from "@/lib/oauth/utils/ideDetect";
+import { resolveOAuthRedirectUri } from "@/lib/oauth/utils/redirectUri";
 import { ZED_HOSTED_CONFIG } from "@/lib/oauth/constants/oauth";
 
 async function completeXaiManualCode(code, state) {
@@ -122,7 +123,10 @@ export async function GET(request, { params }) {
         });
       }
 
-      const redirectUri = searchParams.get("redirect_uri") || "http://localhost:8080/callback";
+      // Hosted dashboards must not be sent to a loopback callback: resolve the
+      // callback URL from OAUTH_REDIRECT_URI / BASE_URL / the request origin.
+      // Clients that need a fixed loopback port (codex/xai) pass redirect_uri.
+      const redirectUri = resolveOAuthRedirectUri(request, searchParams.get("redirect_uri"));
       // Collect provider-specific meta params (e.g. gitlab passes baseUrl, clientId, clientSecret)
       const reservedParams = new Set(["redirect_uri"]);
       const meta = {};

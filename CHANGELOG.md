@@ -1,3 +1,13 @@
+# v0.5.106 (2026-09-26)
+
+## Fixes
+- **Provider OAuth callbacks on a hosted dashboard**: `OAuthModal` hard-coded `http://localhost:<port>/callback`, so a dashboard reached at a public HTTPS domain (reverse proxy, Cloudflare tunnel) sent the authorization code back to the visitor's own machine — over `https` the derived port is empty, producing `http://localhost:443/callback`, which returns to nothing at all. The callback URL is now resolved on the server: explicit `redirect_uri` (codex/xai fixed loopback ports) → `OAUTH_REDIRECT_URI` → `BASE_URL` / `NEXT_PUBLIC_BASE_URL` → the request origin (`X-Forwarded-Proto` + `X-Forwarded-Host`, then `Host`) → `http://localhost:8080/callback`. `OAuthModal` uses the value the server built the authorize URL from, so the popup relay and the token exchange can no longer disagree about the callback
+- **OAuth popup mode behind a proxy**: the auto-relay popup was only used when the dashboard ran on `localhost`, so every remote deployment had to paste the callback URL by hand. The popup is now used whenever the callback returns to the dashboard's own origin (which the resolver above makes the normal case) and manual paste is kept for callbacks on a different origin (codex/xai loopback ports, or a callback configured on another host)
+- **GitLab Duo OAuth hint**: the "Callback URL to register" text derived its port from `window.location` but always printed `localhost`, so it advertised a URL the flow could never use; it now shows this dashboard's origin
+
+## Changes
+- **Dashboard**: new `OAUTH_REDIRECT_URI` env var declares the public callback URL for provider logins (e.g. `https://router.example.com/callback`; a bare origin gets `/callback` appended). Documented in `.env.example` and `DOCKER.md`. Runtime value, read per request — no rebuild needed to change it, and it takes precedence over the stale `BASE_URL` an internal sync keeps pointing at loopback
+
 # v0.5.105 (2026-09-24)
 
 ## Fixes
