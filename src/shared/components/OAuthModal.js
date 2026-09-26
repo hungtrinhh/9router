@@ -32,8 +32,8 @@ const PASTE_TOKEN_PROVIDERS = {
 
 /**
  * OAuth Modal Component
- * - Callback returns to the dashboard origin: auto callback via popup message
- * - Callback returns elsewhere (codex/xai loopback ports): manual paste of the URL
+ * - Localhost: Auto callback via popup message
+ * - Remote: Manual paste callback URL
  */
 export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, onClose, oauthMeta, idcConfig }) {
   const [step, setStep] = useState("waiting"); // waiting | input | success | error
@@ -53,12 +53,16 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
   const { copied, copy } = useCopyToClipboard();
 
   // State for client-only values to avoid hydration mismatch
+  const [isLocalhost, setIsLocalhost] = useState(false);
   const [placeholderUrl, setPlaceholderUrl] = useState("/callback?code=...");
   const callbackProcessedRef = useRef(false);
 
-  // Client-only: absolute callback URL shown in the manual paste input
+  // Detect if running on localhost (client-side only)
   useEffect(() => {
     if (typeof window !== "undefined") {
+      setIsLocalhost(
+        window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"
+      );
       setPlaceholderUrl(`${window.location.origin}/callback?code=...`);
     }
   }, []);
@@ -287,38 +291,26 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         return;
       }
 
+      // Authorization code flow - build redirect URI (some providers require fixed ports)
       const appPort = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
-      // Codex/xAI OAuth clients require their own fixed loopback port, so the
-      // redirect URI has to be passed through. Every other provider lets the
-      // server resolve it (OAUTH_REDIRECT_URI → BASE_URL → request origin) so a
-      // hosted dashboard gets the authorization code back on its own origin.
-      const fixedRedirectUri = provider === "codex"
-        ? "http://localhost:1455/auth/callback"
-        : provider === "xai"
-          ? "http://127.0.0.1:56121/callback"
-          : null;
+      let redirectUri;
+      if (provider === "codex") {
+        redirectUri = "http://localhost:1455/auth/callback";
+      } else if (provider === "xai") {
+        redirectUri = "http://127.0.0.1:56121/callback";
+      } else {
+        redirectUri = `http://localhost:${appPort}/callback`;
+      }
 
       // Build authorize URL first to get codeVerifier/state for codex server-side mode
       const authorizeUrl = new URL(`/api/oauth/${provider}/authorize`, window.location.origin);
-      if (fixedRedirectUri) authorizeUrl.searchParams.set("redirect_uri", fixedRedirectUri);
+      authorizeUrl.searchParams.set("redirect_uri", redirectUri);
       if (oauthMeta) {
         Object.entries(oauthMeta).forEach(([k, v]) => { if (v) authorizeUrl.searchParams.set(k, v); });
       }
       const res = await fetch(authorizeUrl.toString());
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
-      // Server-resolved callback URL: drives the popup relay and the token exchange,
-      // so both must agree on exactly one value.
-      const redirectUri = data.redirectUri || `${window.location.origin}/callback`;
-      // The popup relay only works when the code lands back on this origin; a
-      // loopback or otherwise foreign callback can only be finished by pasting it.
-      let sameOriginRedirect = false;
-      try {
-        sameOriginRedirect = new URL(redirectUri).origin === window.location.origin;
-      } catch {
-        sameOriginRedirect = false;
-      }
 
       // Codex: start proxy with server-side session (auto-exchange) + fallback to channels
       let codexProxyActive = false;
@@ -388,13 +380,12 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
         if (!popupRef.current) {
           setStep("input");
         }
-      } else if (!sameOriginRedirect) {
-        // Callback lands on another origin (e.g. codex/xai fixed loopback port) or
-        // the proxy failed: manual input mode.
+      } else if (!isLocalhost || provider === "codex" || provider === "xai") {
+        // Non-localhost or proxy failed: manual input mode
         setStep("input");
         window.open(data.authUrl, "_blank");
       } else {
-        // Same-origin callback: open popup and wait for the relayed code
+        // Localhost (non-Codex/xAI): Open popup and wait for message
         setStep("waiting");
         popupRef.current = window.open(data.authUrl, "oauth_popup", "width=600,height=700");
         if (!popupRef.current) {
@@ -405,7 +396,7 @@ export default function OAuthModal({ isOpen, provider, providerInfo, onSuccess, 
       setError(err.message);
       setStep("error");
     }
-  }, [provider, startPolling, oauthMeta, idcConfig, authMode, startProxyFlow]);
+  }, [provider, isLocalhost, startPolling, oauthMeta, idcConfig, authMode, startProxyFlow]);
 
   // Reset state and start OAuth when modal opens
   useEffect(() => {

@@ -6,12 +6,10 @@ import { Modal, Button, Input, OAuthModal } from "@/shared/components";
 
 const GITLAB_COM = "https://gitlab.com";
 
-// Callback URL the OAuth flow actually uses: the server resolves it from
-// OAUTH_REDIRECT_URI / BASE_URL, falling back to this dashboard's origin.
-// Register this exact URL in the GitLab OAuth application.
 function getRedirectUri() {
-  if (typeof window === "undefined") return "/callback";
-  return `${window.location.origin}/callback`;
+  if (typeof window === "undefined") return "http://localhost/callback";
+  const port = window.location.port || (window.location.protocol === "https:" ? "443" : "80");
+  return `http://localhost:${port}/callback`;
 }
 
 /**

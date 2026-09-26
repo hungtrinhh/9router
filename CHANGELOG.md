@@ -1,20 +1,9 @@
-# v0.5.107 (2026-09-26)
+# v0.5.108 (2026-09-27)
 
-## Fixes
-- **Google/Gemini login on a hosted dashboard (`Error 400: redirect_uri_mismatch`)**: the bundled Google client (`681255809395-…`, shared by `gemini`, `gemini-cli` and `src/lib/oauth`) and the Antigravity client (`1071006060591-…`) are installed-app clients, so Google accepts loopback redirect URIs for them only — a dashboard served from a public domain was rejected before it could even hand the code back, even after `OAUTH_REDIRECT_URI` pointed at its own `/callback`. Both clients can now be replaced per deployment with `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` and `ANTIGRAVITY_OAUTH_CLIENT_ID` / `ANTIGRAVITY_OAUTH_CLIENT_SECRET`, so a self-hosted install can plug in its own **Web application** client with `https://<domain>/callback` registered. Documented in `.env.example` and `DOCKER.md`
-
-## Changes
-- **OAuth clients single-sourced**: the `gemini`, `gemini-cli` and `antigravity` registry transports (the token-refresh path) each duplicated the Google credentials as literals; they now read `GOOGLE_OAUTH_CLIENT` / `ANTIGRAVITY_OAUTH_CLIENT` from `open-sse/providers/shared.js`, so one env override reaches login, refresh and quota calls alike instead of only the login flow
-
-# v0.5.106 (2026-09-26)
-
-## Fixes
-- **Provider OAuth callbacks on a hosted dashboard**: `OAuthModal` hard-coded `http://localhost:<port>/callback`, so a dashboard reached at a public HTTPS domain (reverse proxy, Cloudflare tunnel) sent the authorization code back to the visitor's own machine — over `https` the derived port is empty, producing `http://localhost:443/callback`, which returns to nothing at all. The callback URL is now resolved on the server: explicit `redirect_uri` (codex/xai fixed loopback ports) → `OAUTH_REDIRECT_URI` → `BASE_URL` / `NEXT_PUBLIC_BASE_URL` → the request origin (`X-Forwarded-Proto` + `X-Forwarded-Host`, then `Host`) → `http://localhost:8080/callback`. `OAuthModal` uses the value the server built the authorize URL from, so the popup relay and the token exchange can no longer disagree about the callback
-- **OAuth popup mode behind a proxy**: the auto-relay popup was only used when the dashboard ran on `localhost`, so every remote deployment had to paste the callback URL by hand. The popup is now used whenever the callback returns to the dashboard's own origin (which the resolver above makes the normal case) and manual paste is kept for callbacks on a different origin (codex/xai loopback ports, or a callback configured on another host)
-- **GitLab Duo OAuth hint**: the "Callback URL to register" text derived its port from `window.location` but always printed `localhost`, so it advertised a URL the flow could never use; it now shows this dashboard's origin
-
-## Changes
-- **Dashboard**: new `OAUTH_REDIRECT_URI` env var declares the public callback URL for provider logins (e.g. `https://router.example.com/callback`; a bare origin gets `/callback` appended). Documented in `.env.example` and `DOCKER.md`. Runtime value, read per request — no rebuild needed to change it, and it takes precedence over the stale `BASE_URL` an internal sync keeps pointing at loopback
+## Reverts
+- **Reverted v0.5.107 and v0.5.106**: provider logins use the bundled OAuth clients again, and the callback URL is back to the loopback default (`http://localhost:<dashboard port>/callback`). Reason: letting a self-hosted deployment attach its own Google Cloud project to the Gemini / Gemini CLI / Antigravity OAuth grants moves any third-party-proxy exposure under the Antigravity ToS (§6 — third-party software, tools or proxies accessing the service) and the Gemini CLI OAuth policy onto that operator's own project and account. With the bundled clients the grant identity stays as it was, and the app needs no OAuth client of its own
+- Removed with the reverts: `src/lib/oauth/utils/redirectUri.js`, the `OAUTH_REDIRECT_URI` / `GOOGLE_OAUTH_CLIENT_*` / `ANTIGRAVITY_OAUTH_CLIENT_*` env support and their documentation, the registry transports' shared-client indirection (client credentials are literals again), the same-origin popup selection in `OAuthModal`, and the two unit tests added by those releases
+- Consequence for a dashboard served from a public domain: Google sends the authorization code to the loopback URL on the machine running the browser and the login modal asks for the callback URL to be pasted, instead of returning the code to the dashboard origin. The images for v0.5.106 / v0.5.107 remain published but are superseded by this release
 
 # v0.5.105 (2026-09-24)
 

@@ -64,25 +64,6 @@ docker run -d \
   decolua/9router:latest
 ```
 
-Provider OAuth logins (Google/Gemini, Claude, GitLab, ...) redirect the browser back to `/callback` on this app. When the container sits behind a reverse proxy on a custom domain, set the public URL so the authorization code is not lost on a loopback address:
-
-```bash
--e OAUTH_REDIRECT_URI=https://router.example.com/callback
-```
-
-Without it the callback defaults to `BASE_URL`, then to the origin of the incoming request (honoring `X-Forwarded-Proto`/`X-Forwarded-Host`).
-
-Google logins (Gemini, Gemini CLI, Antigravity) additionally need your own client: the bundled ones are installed-app clients, which Google only accepts for loopback redirects (`Error 400: redirect_uri_mismatch`). Create a **Web application** client in Google Cloud Console with the callback URL above as an Authorized redirect URI, then pass:
-
-```bash
--e GOOGLE_OAUTH_CLIENT_ID=... \
--e GOOGLE_OAUTH_CLIENT_SECRET=... \
--e ANTIGRAVITY_OAUTH_CLIENT_ID=... \
--e ANTIGRAVITY_OAUTH_CLIENT_SECRET=...
-```
-
-Omit the `ANTIGRAVITY_*` pair if you do not use the Antigravity provider (Gemini CLI and Antigravity each need their own client, or share one).
-
 ## Optional Headroom sidecar
 
 The 9Router image does not bundle Python or Headroom. To use Headroom in Docker, run it as a separate service and point 9Router at that proxy:
