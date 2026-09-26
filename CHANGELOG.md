@@ -1,3 +1,11 @@
+# v0.5.107 (2026-09-26)
+
+## Fixes
+- **Google/Gemini login on a hosted dashboard (`Error 400: redirect_uri_mismatch`)**: the bundled Google client (`681255809395-…`, shared by `gemini`, `gemini-cli` and `src/lib/oauth`) and the Antigravity client (`1071006060591-…`) are installed-app clients, so Google accepts loopback redirect URIs for them only — a dashboard served from a public domain was rejected before it could even hand the code back, even after `OAUTH_REDIRECT_URI` pointed at its own `/callback`. Both clients can now be replaced per deployment with `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` and `ANTIGRAVITY_OAUTH_CLIENT_ID` / `ANTIGRAVITY_OAUTH_CLIENT_SECRET`, so a self-hosted install can plug in its own **Web application** client with `https://<domain>/callback` registered. Documented in `.env.example` and `DOCKER.md`
+
+## Changes
+- **OAuth clients single-sourced**: the `gemini`, `gemini-cli` and `antigravity` registry transports (the token-refresh path) each duplicated the Google credentials as literals; they now read `GOOGLE_OAUTH_CLIENT` / `ANTIGRAVITY_OAUTH_CLIENT` from `open-sse/providers/shared.js`, so one env override reaches login, refresh and quota calls alike instead of only the login flow
+
 # v0.5.106 (2026-09-26)
 
 ## Fixes

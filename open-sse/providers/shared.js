@@ -82,14 +82,24 @@ export const ANTIGRAVITY_IDE_VERSION = "2.11.0";
 export const ANTIGRAVITY_IDE_BASE_URL = "https://daily-cloudcode-pa.googleapis.com";
 export const ANTIGRAVITY_IDE_USER_AGENT = `antigravity/ide/${ANTIGRAVITY_IDE_VERSION} darwin/arm64`;
 
-// Antigravity OAuth client credentials (public CLI client — duplicated in usage.js + src/lib/oauth)
+// Both Google clients below are installed-app ("Desktop") clients, so Google only
+// accepts loopback redirect URIs for them; a dashboard hosted on a public domain
+// needs its own Web application client with the hosted /callback registered.
+// These env vars swap the credentials in without patching the constants; they are
+// read when the module loads, i.e. from the runtime environment of the server.
+function envOr(envKey, fallback) {
+  return (process.env[envKey] || "").trim() || fallback;
+}
+
+// Antigravity OAuth client credentials (public CLI client — shared by usage.js,
+// the registry transports and src/lib/oauth)
 export const ANTIGRAVITY_OAUTH_CLIENT = {
-  clientId: "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com",
-  clientSecret: "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"
+  clientId: envOr("ANTIGRAVITY_OAUTH_CLIENT_ID", "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"),
+  clientSecret: envOr("ANTIGRAVITY_OAUTH_CLIENT_SECRET", "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")
 };
 
 // Gemini (Google) OAuth client credentials (public CLI client — shared by gemini, gemini-cli, src/lib/oauth)
 export const GOOGLE_OAUTH_CLIENT = {
-  clientId: "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com",
-  clientSecret: "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"
+  clientId: envOr("GOOGLE_OAUTH_CLIENT_ID", "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com"),
+  clientSecret: envOr("GOOGLE_OAUTH_CLIENT_SECRET", "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")
 };
